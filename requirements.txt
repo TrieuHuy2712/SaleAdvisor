@@ -1,0 +1,6 @@
+Flask~=3.1.0
+requests~=2.31.0
+openai~=0.27.0
+pymongo~=4.12.1
+sshtunnel~=0.4.0
+datetime~=5.5
