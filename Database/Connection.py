@@ -29,11 +29,12 @@ def get_credentials():
     verify_token = credentials.get("verify_token")
     page_access_token = credentials.get("page_access_token")
     openai_api_key = credentials.get("openai_api_key")
+    gpt_model = credentials.get("gpt_model", "gpt-3.5-turbo-1106")
 
-    if not all([verify_token, page_access_token, openai_api_key]):
+    if not all([verify_token, page_access_token, openai_api_key, gpt_model]):
         raise ValueError("Missing required credentials in the database")
 
-    return verify_token, page_access_token, openai_api_key
+    return verify_token, page_access_token, openai_api_key, gpt_model
 
 
 def get_functions():
@@ -88,10 +89,55 @@ def get_prompt():
     collection = db[PROMPT_COLLECTION_NAME]
 
     # Query the collection for the prompt
-    prompt = collection.find_one({}, {"_id": 0})
+    prompt = collection.find_one({"promptType": "main"}, {"_id": 0})
 
     if not prompt:
         raise ValueError("Prompt not found in the database")
+
+    return prompt.get("content", "")
+
+
+def get_follow_up_prompt():
+    # Connect to MongoDB
+    client = MongoClient(MONGO_URI)
+    db = client[DATABASE_NAME]
+    collection = db[PROMPT_COLLECTION_NAME]
+
+    # Query the collection for the follow-up prompt
+    prompt = collection.find_one({"promptType": "follow-up"}, {"_id": 0})
+
+    if not prompt:
+        raise ValueError("Follow-up prompt not found in the database")
+
+    return prompt.get("content", "")
+
+
+def get_welcome_prompt():
+    # Connect to MongoDB
+    client = MongoClient(MONGO_URI)
+    db = client[DATABASE_NAME]
+    collection = db[PROMPT_COLLECTION_NAME]
+
+    # Query the collection for the introduce prompt
+    prompt = collection.find_one({"promptType": "welcome"}, {"_id": 0})
+
+    if not prompt:
+        raise ValueError("Welcome prompt not found in the database")
+
+    return prompt.get("content", "")
+
+
+def get_classify_prompt():
+    # Connect to MongoDB
+    client = MongoClient(MONGO_URI)
+    db = client[DATABASE_NAME]
+    collection = db[PROMPT_COLLECTION_NAME]
+
+    # Query the collection for the classify prompt
+    prompt = collection.find_one({"promptType": "classify"}, {"_id": 0})
+
+    if not prompt:
+        raise ValueError("Classify prompt not found in the database")
 
     return prompt.get("content", "")
 
@@ -124,7 +170,7 @@ def post_chat(user_id, message):
                                "created_at": datetime.utcnow(), "updated_at": datetime.utcnow()})
 
 
-def get_chat(user_id):
+def get_chat_by_userid(user_id):
     # Connect to MongoDB
     client = MongoClient(MONGO_URI)
     db = client[DATABASE_NAME]
@@ -142,3 +188,18 @@ def get_chat(user_id):
     last_messages = messages[-20:] if len(messages) > 10 else messages
 
     return last_messages
+
+
+def get_all_chat():
+    # Connect to MongoDB
+    client = MongoClient(MONGO_URI)
+    db = client[DATABASE_NAME]
+    collection = db[CHAT_COLLECTION_NAME]
+
+    # Query the collection for all chat messages
+    chats = list(collection.find({}, {"_id": 0}))
+
+    if not chats:
+        return []
+
+    return chats
