@@ -3,7 +3,7 @@ import requests
 
 from Database.Connection import post_chat, get_constant_message
 from Database.SheetConnection import save_booking_to_sheet, add_user_to_sheet, get_chatbot_turn_on, \
-    get_user_existed_on_sheet
+    get_user_existed_on_sheet, get_follow_up_turn_on
 
 
 class MessageClient:
@@ -71,7 +71,7 @@ class MessageClient:
         first_name = data.get('first_name', 'Người dùng')
         last_name = data.get('last_name', '')
         self.send_message_with_no_logs(recipient_id=user_id,
-                                       message_text="Cảm ơn quý khách đã liên đặt lịch hẹn với phòng khám của chúng tôi. "
+                                       message_text="Cảm ơn quý khách đã liên hệ đặt lịch hẹn với phòng khám của chúng tôi. "
                                                     "Chúng tôi sẽ liên hệ lại với bạn trong thời gian sớm nhất để xác nhận lịch hẹn.")
         save_booking_to_sheet(user_id=user_id, user_name=f"{first_name} {last_name}", message_text=message_text)
         return
@@ -131,4 +131,15 @@ class MessageClient:
             return get_chatbot_turn_on(user_id) or not get_user_existed_on_sheet(user_id)
         except Exception as e:
             print(f"❌ Lỗi khi kiểm tra trạng thái chatbot: {e}")
+            return False
+
+    @staticmethod
+    def check_permission_follow_up(user_id):
+        """
+        Kiểm tra xem follow up có đang bật cho người dùng này không.
+        """
+        try:
+            return get_follow_up_turn_on(user_id)
+        except Exception as e:
+            print(f"❌ Lỗi khi kiểm tra trạng thái follow up: {e}")
             return False

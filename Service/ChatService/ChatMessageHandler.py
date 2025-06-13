@@ -7,11 +7,11 @@ from Database.SheetConnection import get_user_existed_on_sheet
 from Service.ChatService import IChatService
 from Service.MessageService import MessageClient
 
-
 @dataclass
 class ChatMessageHandler:
     chat_service: IChatService
     messenger: MessageClient
+    fb_page_id: str
 
     def handle_entry(self, entry):
         messaging_events = entry.get('messaging', [])
@@ -30,11 +30,12 @@ class ChatMessageHandler:
         print(f"📩 Message from {sender_id}: {message_text}")
 
         "Check chat bot is active "
-        if not get_user_existed_on_sheet(sender_id):
+        if not get_user_existed_on_sheet(sender_id) and sender_id != self.fb_page_id:
             self.messenger.save_user(sender_id)
-            return
 
-        if message_text and self.messenger.check_permission_auto_message(sender_id):
+        if (message_text
+                and self.messenger.check_permission_auto_message(sender_id))\
+                and sender_id != self.fb_page_id:
             try:
                 response = self.chat_service.ask(message_text, sender_id)
 

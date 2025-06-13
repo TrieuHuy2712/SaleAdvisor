@@ -30,11 +30,13 @@ def get_credentials():
     page_access_token = credentials.get("page_access_token")
     openai_api_key = credentials.get("openai_api_key")
     gpt_model = credentials.get("gpt_model", "gpt-3.5-turbo-1106")
+    recurring_time = credentials.get("recurring_time", 60)
+    fb_page_id = credentials.get("fb_page_id")
 
     if not all([verify_token, page_access_token, openai_api_key, gpt_model]):
         raise ValueError("Missing required credentials in the database")
 
-    return verify_token, page_access_token, openai_api_key, gpt_model
+    return verify_token, page_access_token, openai_api_key, gpt_model, recurring_time, fb_page_id
 
 
 def get_functions():
@@ -203,3 +205,19 @@ def get_all_chat():
         return []
 
     return chats
+
+
+def get_gg_sheet_key():
+    """
+    Get the Google Sheet key from the database.
+    """
+    client = MongoClient(MONGO_URI)
+    db = client[DATABASE_NAME]
+    collection = db[CONFIG_COLLECTION_NAME]
+
+    sheet_key = collection.find_one()
+
+    if not sheet_key:
+        raise ValueError("Sheet key not found in the database")
+
+    return sheet_key.get("sheet_key", "")

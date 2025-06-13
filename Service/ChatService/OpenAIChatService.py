@@ -9,6 +9,7 @@ from Service.ChatService.IChatService import IChatService
 @dataclass
 class OpenAIChatService(IChatService):
     openai_key: str
+    model: str
 
     def __post_init__(self):
         openai.api_key = self.openai_key
@@ -42,7 +43,7 @@ class OpenAIChatService(IChatService):
 
         # Send to OpenAI
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",  # Đổi từ gpt-4-turbo
+            model=self.model,  # Đổi từ gpt-4-turbo
             functions=functions,
             function_call="auto",
             messages=messages,
@@ -75,7 +76,7 @@ class OpenAIChatService(IChatService):
 
         # Gửi đến OpenAI
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model=self.model,
             messages=messages,
             temperature=0.7,
         )
@@ -84,11 +85,11 @@ class OpenAIChatService(IChatService):
 
     @staticmethod
     def classify_message_with_prompt(message: str) -> str:
-        prompt = get_classify_prompt().format(message=message)
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": get_classify_prompt()},
+                {"role": "user", "content": message}
             ],
             temperature=0
         )
