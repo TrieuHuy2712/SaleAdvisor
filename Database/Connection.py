@@ -144,32 +144,47 @@ def get_classify_prompt():
     return prompt.get("content", "")
 
 
-def post_chat(user_id, message):
+def post_chat(user_id, message, is_update=True):
+    """
+    Posts or updates chat messages for a user in the MongoDB collection.
+
+    Args:
+        user_id (str): The ID of the user.
+        message (list): The list of messages to be added.
+        is_update (bool): Flag to determine whether to update the `updated_at` field. Defaults to True.
+    """
     # Connect to MongoDB
     client = MongoClient(MONGO_URI)
     db = client[DATABASE_NAME]
     collection = db[CHAT_COLLECTION_NAME]
 
-    # Query the collection for the post chat message
+    # Query the collection for the user
     existed_user = collection.find_one({"user_id": user_id})
+
+    update_data = {
+        "$push": {
+            "messages": {
+                "$each": message,
+                "$slice": -20
+            }
+        },
+        "$setOnInsert": {"created_at": datetime.utcnow()}
+    }
+
+    if is_update:
+        update_data["$set"] = {"updated_at": datetime.utcnow()}
+
     if existed_user:
         # Update existing user chat
-        collection.update_one({"user_id": user_id}, {
-            "$push": {
-                "messages": {
-                    "$each": message,
-                    "$slice": -20
-                }
-            },  # 👈 Append thêm dòng mới
-            "$set": {"updated_at": datetime.utcnow()},
-            "$setOnInsert": {"created_at": datetime.utcnow()}
-        },
-                              upsert=True
-                              )
+        collection.update_one({"user_id": user_id}, update_data, upsert=True)
     else:
         # Create new user chat
-        collection.insert_one({"user_id": user_id, "messages": message,
-                               "created_at": datetime.utcnow(), "updated_at": datetime.utcnow()})
+        collection.insert_one({
+            "user_id": user_id,
+            "messages": message,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        })
 
 
 def get_chat_by_userid(user_id):

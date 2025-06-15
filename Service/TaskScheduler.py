@@ -27,7 +27,7 @@ class TaskScheduler:
         self.message.send_message_with_no_logs(user_id, gpt_message.get('content', ''))
         set_user_follow_up_action(user_id, False)
 
-    def check_inactivity(self, threshold_minutes=5):
+    def check_inactivity(self, threshold_minutes=60):
         now = datetime.utcnow()
         for user_data in get_all_chat():
             last_update = user_data.get('updated_at')

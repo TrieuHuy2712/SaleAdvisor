@@ -3,9 +3,11 @@ import re
 import time
 from dataclasses import dataclass
 
+from Database.Connection import post_chat
 from Database.SheetConnection import get_user_existed_on_sheet
 from Service.ChatService import IChatService
 from Service.MessageService import MessageClient
+
 
 @dataclass
 class ChatMessageHandler:
@@ -34,7 +36,7 @@ class ChatMessageHandler:
             self.messenger.save_user(sender_id)
 
         if (message_text
-                and self.messenger.check_permission_auto_message(sender_id))\
+            and self.messenger.check_permission_auto_message(sender_id)) \
                 and sender_id != self.fb_page_id:
             try:
                 response = self.chat_service.ask(message_text, sender_id)
@@ -54,6 +56,15 @@ class ChatMessageHandler:
 
             except Exception as e:
                 print(f"❌ Error processing message: {e}")
+        elif (message_text
+              and not self.messenger.check_permission_auto_message(sender_id)
+              and sender_id != self.fb_page_id):  # Case when chatbot turned off and user sends a message
+            post_chat(sender_id, [{"role": "user", "content": message_text}])
+        elif (message_text  # Case when chatbot turned off and page sends a message
+              and sender_id == self.fb_page_id
+              and not self.messenger.check_permission_auto_message(recipient_id)):
+            post_chat(recipient_id, [{"role": "assistant", "content": message_text}], is_update=False)
+
 
     @staticmethod
     def split_text_and_json(response_text):
