@@ -111,7 +111,7 @@ class MessageClient:
         response = requests.post(self.api_url, headers=self.headers, json=data)
         return response.json()
 
-    def save_user(self, user_id):
+    def save_user(self, user_id, is_chatbot_on=False):
         """
         Lấy tên người dùng từ Facebook API.
         """
@@ -124,9 +124,9 @@ class MessageClient:
         if response.status_code == 200:
             data = response.json()
             username = f"{data.get('first_name', '')} {data.get('last_name', '')}"
-            add_user_to_sheet(user_id=user_id, user_name=username)
+            add_user_to_sheet(user_id=user_id, user_name=username, is_chatbot_on=is_chatbot_on)
         else:
-            add_user_to_sheet(user_id=user_id, user_name="Người dùng")
+            add_user_to_sheet(user_id=user_id, user_name="Người dùng", is_chatbot_on=is_chatbot_on)
             # print(f"❌ Lỗi khi lấy tên người dùng: {response.text}")
             # return "Người dùng"
 

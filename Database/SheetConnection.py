@@ -64,7 +64,7 @@ def get_user_existed_on_sheet(user_id):
         return False
 
 
-def add_user_to_sheet(user_id, user_name):
+def add_user_to_sheet(user_id, user_name, is_chatbot_on=False):
     """
     Add a new user to the 'Customer' sheet.
     """
@@ -73,7 +73,7 @@ def add_user_to_sheet(user_id, user_name):
         if get_user_existed_on_sheet(user_id):
             print(f"User {user_id} already exists in the sheet.")
             return
-        sheet.append_row([user_id, user_name, False, False])
+        sheet.append_row([user_id, user_name, is_chatbot_on, False])
     except Exception as e:
         print(f"❌ Error adding user to sheet: {e}")
 
