@@ -108,6 +108,8 @@ class OpenAIChatService(IChatService):
                 {"role": "system", "content": "You are a language detector that only answers 'true' or 'false'."},
                 {"role": "user", "content": prompt}
             ],
+            max_tokens=5,  # chỉ cần 1 từ: true hoặc false
+            timeout=5,  # giới hạn thời gian, nếu quá thì raise exception
             temperature=0
         )
         return response.choices[0].message["content"].strip().lower() == "true"
