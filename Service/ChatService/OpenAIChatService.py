@@ -96,6 +96,22 @@ class OpenAIChatService(IChatService):
         reply = response.choices[0].message['content'].strip().lower()
         return reply
 
+    @staticmethod
+    def detect_english_language_message(message: str) -> bool:
+        """
+        Phát hiện ngôn ngữ của tin nhắn.
+        """
+        prompt = f'Is the following sentence written entirely in English (without any Vietnamese words or structure)? Answer only "true" or "false". Sentence: "{message}"'
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a language detector that only answers 'true' or 'false'."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0
+        )
+        return response.choices[0].message["content"].strip().lower() == "true"
+
     def filter_faq_data(self, data) -> dict:
         """
         Lọc dữ liệu FAQ để chỉ lấy các câu hỏi và câu trả lời.

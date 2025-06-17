@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass
 
 from Database.Connection import post_chat
-from Database.SheetConnection import get_user_existed_on_sheet
+from Database.SheetConnection import get_user_existed_on_sheet, add_user_permission_user_to_sheet
 from Service.ChatService import IChatService
 from Service.MessageService import MessageClient
 
@@ -32,8 +32,12 @@ class ChatMessageHandler:
         print(f"📩 Message from {sender_id}: {message_text}")
 
         "Check chat bot is active "
-        if not get_user_existed_on_sheet(sender_id) and sender_id != self.fb_page_id:
-            self.messenger.save_user(sender_id)
+        if (not get_user_existed_on_sheet(sender_id)
+                and sender_id != self.fb_page_id):
+            if not self.chat_service.detect_english_language_message(message_text):
+                self.messenger.save_user(sender_id)
+            else:
+                add_user_permission_user_to_sheet(sender_id, True)
 
         if (message_text
             and self.messenger.check_permission_auto_message(sender_id)) \

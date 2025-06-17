@@ -73,7 +73,21 @@ def add_user_to_sheet(user_id, user_name):
         if get_user_existed_on_sheet(user_id):
             print(f"User {user_id} already exists in the sheet.")
             return
-        sheet.append_row([user_id, user_name, True, True])
+        sheet.append_row([user_id, user_name, False, False])
+    except Exception as e:
+        print(f"❌ Error adding user to sheet: {e}")
+
+
+def add_user_permission_user_to_sheet(user_id, user_name):
+    """
+       Add a new user to the 'Customer' sheet.
+       """
+    try:
+        sheet = get_google_sheet("Customer")
+        if get_user_existed_on_sheet(user_id):
+            print(f"User {user_id} already exists in the sheet.")
+            return
+        sheet.append_row([user_id, user_name, True, False])
     except Exception as e:
         print(f"❌ Error adding user to sheet: {e}")
 
