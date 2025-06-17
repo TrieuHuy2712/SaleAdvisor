@@ -37,7 +37,7 @@ class ChatMessageHandler:
             if not self.chat_service.detect_english_language_message(message_text):
                 self.messenger.save_user(sender_id)
             else:
-                add_user_permission_user_to_sheet(sender_id, True)
+                add_user_permission_user_to_sheet(sender_id, "Checker from Facebook")
 
         if (message_text
             and self.messenger.check_permission_auto_message(sender_id)) \
