@@ -24,7 +24,7 @@ class TaskScheduler:
 
     def send_reminder(self, user_id, hour_diff=5):
         gpt_message = self.chatService.ask_follow_up(user_id, hour_diff)
-        self.message.send_message_with_no_logs(user_id, gpt_message.get('content', ''))
+        self.message.send_message_with_no_logs(user_id, self.chatService.convert_markdown_bold_to_unicode(gpt_message.get('content', '')))
         set_user_follow_up_action(user_id, False)
 
     def check_inactivity(self, threshold_minutes=60):

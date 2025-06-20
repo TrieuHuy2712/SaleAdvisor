@@ -47,6 +47,7 @@ class ChatMessageHandler:
                     self.messenger.send_image(sender_id)
 
                 content = response.get("content", "")
+                content = self.chat_service.convert_markdown_bold_to_unicode(content)
                 text_part, json_part = self.split_text_and_json(content)
 
                 if text_part == "booking":
