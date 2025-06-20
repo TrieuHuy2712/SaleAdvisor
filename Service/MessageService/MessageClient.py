@@ -71,13 +71,13 @@ class MessageClient:
 
         if response.status_code != 200:
             self.send_message_with_no_logs(recipient_id=user_id,
-                                           message_text="Quý khách cho em xin tên, số điện thoại và thời gian đến để em kiểm tra lịch cho mình ngay ạ!")
+                                           message_text="Quý khách cho em xin Tên, Số điện thoại và Thời gian đến để em kiểm tra lịch cho mình ngay ạ!")
             save_booking_to_sheet(user_id=user_id, user_name=f"Nguoi dung", message_text=message_text)
         else:
             first_name = data.get('first_name', 'Người dùng')
             last_name = data.get('last_name', '')
             self.send_message_with_no_logs(recipient_id=user_id,
-                                           message_text="Quý khách cho em xin tên, số điện thoại và thời gian đến để em kiểm tra lịch cho mình ngay ạ!")
+                                           message_text="Quý khách cho em xin Tên, Số điện thoại và Thời gian đến để em kiểm tra lịch cho mình ngay ạ!")
             save_booking_to_sheet(user_id=user_id, user_name=f"{first_name} {last_name}", message_text=message_text)
         return
 
