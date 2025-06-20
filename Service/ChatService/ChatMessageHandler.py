@@ -33,7 +33,7 @@ class ChatMessageHandler:
 
         "Check chat bot is active "
         if not get_user_existed_on_sheet(sender_id) and sender_id != self.fb_page_id:
-            self.messenger.save_user(sender_id, self.chat_service.detect_english_language_message(message_text))
+            self.messenger.save_user(sender_id, True)
 
         if (message_text
             and self.messenger.check_permission_auto_message(sender_id)) \
