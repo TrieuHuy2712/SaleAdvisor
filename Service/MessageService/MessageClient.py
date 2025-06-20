@@ -72,14 +72,14 @@ class MessageClient:
         if response.status_code != 200:
             self.send_message_with_no_logs(recipient_id=user_id,
                                            message_text="Cảm ơn quý khách đã liên hệ đặt lịch hẹn với phòng khám của chúng tôi. "
-                                                        "Chúng tôi sẽ liên hệ lại với bạn trong thời gian sớm nhất để xác nhận lịch hẹn.")
+                                                        "Quý khách cho em xin tên, số điện thoại, và thời gian đến để em kiểm tra lịch cho mình ngay ạ!")
             save_booking_to_sheet(user_id=user_id, user_name=f"Nguoi dung", message_text=message_text)
         else:
             first_name = data.get('first_name', 'Người dùng')
             last_name = data.get('last_name', '')
             self.send_message_with_no_logs(recipient_id=user_id,
                                            message_text="Cảm ơn quý khách đã liên hệ đặt lịch hẹn với phòng khám của chúng tôi. "
-                                                        "Chúng tôi sẽ liên hệ lại với bạn trong thời gian sớm nhất để xác nhận lịch hẹn.")
+                                                        "Quý khách cho em xin tên, số điện thoại, và thời gian đến để em kiểm tra lịch cho mình ngay ạ!")
             save_booking_to_sheet(user_id=user_id, user_name=f"{first_name} {last_name}", message_text=message_text)
         return
 
