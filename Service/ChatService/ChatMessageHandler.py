@@ -8,7 +8,7 @@ from Database.SheetConnection import get_user_existed_on_sheet, add_user_permiss
 from Service.ChatService import IChatService
 from Service.MessageService import MessageClient
 
-
+processed_message_ids = set()
 @dataclass
 class ChatMessageHandler:
     chat_service: IChatService
@@ -21,6 +21,17 @@ class ChatMessageHandler:
             self.handle_message_event(event)
 
     def handle_message_event(self, event):
+        message = event.get('message')
+        message_id = message.get('mid')
+        if not message_id:
+            return
+
+        if message_id in processed_message_ids:
+            print(f"⚠️ Đã xử lý message_id: {message_id}, bỏ qua.")
+            return
+
+        processed_message_ids.add(message_id)
+
         sender_id = event['sender']['id']
         recipient_id = event['recipient']['id']
         message_text = event.get('message', {}).get('text')
