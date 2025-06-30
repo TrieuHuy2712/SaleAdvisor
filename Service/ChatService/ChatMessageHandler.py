@@ -82,6 +82,7 @@ class ChatMessageHandler:
 
                     # Follow-up Chat
                     if followup or followup != "\n\n":
+                        time.sleep(3)  # Delay to avoid rate limiting
                         self.messenger.send_message_with_no_logs(sender_id, followup)
                         post_chat(sender_id, [{"role": "assistant", "content": followup}], is_update=False)
 
