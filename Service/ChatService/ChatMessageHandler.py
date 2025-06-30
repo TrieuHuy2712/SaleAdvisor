@@ -2,6 +2,8 @@
 import re
 import time
 import traceback
+import threading
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -57,7 +59,45 @@ class ChatMessageHandler:
 
         print(f"📩 Message from {sender_id}: {message_text}")
 
-        "Check chat bot is active "
+        if not get_user_existed_on_sheet(sender_id) and sender_id != self.fb_page_id:
+            self.messenger.save_user(sender_id, True)
+
+        if (message_text
+            and self.messenger.check_permission_auto_message(sender_id)) \
+                and sender_id != self.fb_page_id:
+            self.debounce_user_message(sender_id, message_text)
+
+        elif (message_text
+              and not self.messenger.check_permission_auto_message(sender_id)
+              and sender_id != self.fb_page_id):
+            post_chat(sender_id, [{"role": "user", "content": message_text}])
+
+        elif (message_text
+              and sender_id == self.fb_page_id
+              and not permission_user):
+            post_chat(recipient_id, [{"role": "assistant", "content": message_text}], is_update=False)
+
+    def debounce_user_message(self, sender_id, message_text):
+        message_buffers[sender_id].append(message_text)
+
+        if sender_id in debounce_timers:
+            debounce_timers[sender_id].cancel()
+
+        timer = threading.Timer(
+            DEBOUNCE_DELAY_SECONDS,
+            self.debounce_process_message,
+            args=(sender_id,)
+        )
+        debounce_timers[sender_id] = timer
+        timer.start()
+
+    def debounce_process_message(self, sender_id):
+        # ✅ Loại trùng nội dung giữ thứ tự
+        message_texts = list(dict.fromkeys(message_buffers[sender_id]))
+        full_message = "\n".join(message_texts)
+        message_buffers[sender_id].clear()
+
+       "Check chat bot is active "
         if sender_id != self.fb_page_id and not self.get_user_existed_on_cached(
                 sender_id) and not get_user_existed_on_sheet(sender_id):
             print(f"📩 User {sender_id} not found in sheet, adding to sheet. có message {message_text}")
@@ -107,14 +147,6 @@ class ChatMessageHandler:
             except Exception as e:
                 print(f"❌ Error processing message: {e}")
                 traceback.print_exc()
-        elif (message_text
-              and not permission_user
-              and sender_id != self.fb_page_id):  # Case when chatbot turned off and user sends a message
-            post_chat(sender_id, [{"role": "user", "content": message_text}])
-        elif (message_text  # Case when chatbot turned off and page sends a message
-              and sender_id == self.fb_page_id
-              and not permission_user):
-            post_chat(recipient_id, [{"role": "assistant", "content": message_text}], is_update=False)
 
     @staticmethod
     def set_cached_permission(user_id, value=True):
@@ -137,9 +169,6 @@ class ChatMessageHandler:
 
     @staticmethod
     def split_text_and_json(response_text):
-        """
-        Tách phần text và JSON từ phản hồi của GPT.
-        """
         if not isinstance(response_text, str):
             print(f"[⚠️] Invalid response_text type: {type(response_text)}")
             return "", None
@@ -155,18 +184,13 @@ class ChatMessageHandler:
         return response_text.strip(), None
 
     def split_main_and_followup(self, text: str, user_id: str) -> tuple:
-        """
-        Splits the input text into main reply and follow-up sections based on keywords.
-        """
         blocks = text.strip().split("\n\n")
         chat_history = get_chat_by_userid(user_id=user_id)
         follow_up_keywords = get_follow_up_keywords()
 
-        # Separate blocks into main reply and follow-up
         main_reply = [block for block in blocks if not any(kw in block.lower() for kw in follow_up_keywords)]
         followup = [block for block in blocks if any(kw in block.lower() for kw in follow_up_keywords)]
 
-        # Check if follow-up has already been sent
         if followup and self.has_answer_been_sent(chat_history, follow_up_keywords):
             followup = []
 
