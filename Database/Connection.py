@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-from pymongo import MongoClient
 from datetime import datetime
+
+from pymongo import MongoClient
 
 # MongoDB connection URI
 MONGO_URI = "mongodb://localhost:27017"  # Replace with your MongoDB URI
@@ -236,3 +237,19 @@ def get_gg_sheet_key():
         raise ValueError("Sheet key not found in the database")
 
     return sheet_key.get("sheet_key", "")
+
+
+def get_follow_up_keywords():
+    """
+    Get the follow-up keywords from the database.
+    """
+    client = MongoClient(MONGO_URI)
+    db = client[DATABASE_NAME]
+    collection = db[CONSTANT_MESSAGE_COLLECTION_NAME]
+
+    keywords = collection.find_one({"type": "follow_up_keywords"}, {"_id": 0})
+
+    if not keywords:
+        raise ValueError("Follow-up keywords not found in the database")
+
+    return keywords.get("content", [])

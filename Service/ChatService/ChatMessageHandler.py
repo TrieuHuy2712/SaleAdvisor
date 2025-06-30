@@ -3,12 +3,14 @@ import re
 import time
 from dataclasses import dataclass
 
-from Database.Connection import post_chat
-from Database.SheetConnection import get_user_existed_on_sheet, add_user_permission_user_to_sheet
+from Database.Connection import post_chat, get_chat_by_userid, get_follow_up_keywords
+from Database.SheetConnection import get_user_existed_on_sheet
 from Service.ChatService import IChatService
 from Service.MessageService import MessageClient
 
 processed_message_ids = set()
+
+
 @dataclass
 class ChatMessageHandler:
     chat_service: IChatService
@@ -64,7 +66,24 @@ class ChatMessageHandler:
                 if text_part == "booking":
                     self.messenger.send_booking_message(sender_id, message_text=message_text)
                     return
-                self.messenger.send_message(sender_id, (text_part, json_part), message_text)
+
+                if json_part:
+                    self.messenger.send_message(sender_id, (text_part, json_part), message_text)
+                    return
+                else:  # Case when no JSON part and Split multiple message
+                    main, followup = self.split_main_and_followup(text_part, sender_id)
+
+                    # User Chat
+                    post_chat(sender_id, [{"role": "user", "content": message_text}], is_update=True)
+
+                    # Main Chat
+                    self.messenger.send_message_with_no_logs(sender_id, main)
+                    post_chat(sender_id, [{"role": "assistant", "content": main}], is_update=False)
+
+                    # Follow-up Chat
+                    if followup or followup != "\n\n":
+                        self.messenger.send_message_with_no_logs(sender_id, followup)
+                        post_chat(sender_id, [{"role": "assistant", "content": followup}], is_update=False)
 
             except Exception as e:
                 print(f"❌ Error processing message: {e}")
@@ -76,7 +95,6 @@ class ChatMessageHandler:
               and sender_id == self.fb_page_id
               and not self.messenger.check_permission_auto_message(recipient_id)):
             post_chat(recipient_id, [{"role": "assistant", "content": message_text}], is_update=False)
-
 
     @staticmethod
     def split_text_and_json(response_text):
@@ -96,3 +114,30 @@ class ChatMessageHandler:
             return text_without_json, json_part
 
         return response_text.strip(), None
+
+    def split_main_and_followup(self, text: str, user_id: str) -> tuple:
+        """
+        Splits the input text into main reply and follow-up sections based on keywords.
+        """
+        blocks = text.strip().split("\n\n")
+        chat_history = get_chat_by_userid(user_id=user_id)
+        follow_up_keywords = get_follow_up_keywords()
+
+        # Separate blocks into main reply and follow-up
+        main_reply = [block for block in blocks if not any(kw in block.lower() for kw in follow_up_keywords)]
+        followup = [block for block in blocks if any(kw in block.lower() for kw in follow_up_keywords)]
+
+        # Check if follow-up has already been sent
+        if followup and self.has_answer_been_sent(chat_history, follow_up_keywords):
+            followup = []
+
+        return "\n\n".join(main_reply), "\n\n".join(followup)
+
+    @staticmethod
+    def has_answer_been_sent(history_messages: list, followup_keywords: list) -> bool:
+        for msg in history_messages:
+            if msg["role"] == "assistant":
+                content_lower = msg["content"].lower()
+                if any(kw in content_lower for kw in followup_keywords):
+                    return True
+        return False
