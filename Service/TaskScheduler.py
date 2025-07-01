@@ -9,7 +9,7 @@ from Service.MessageService import MessageClient
 
 
 class TaskScheduler:
-    def __init__(self, chatService: IChatService, message: MessageClient, recurring_time=60):
+    def __init__(self, chatService: IChatService, message: MessageClient, recurring_time=1440):
         self.recurring_time = recurring_time
         self.scheduler = BackgroundScheduler()
         self.scheduler.add_job(self.check_inactivity, 'interval', minutes=self.recurring_time)
@@ -27,7 +27,7 @@ class TaskScheduler:
         self.message.send_message_with_no_logs(user_id, self.chatService.convert_markdown_bold_to_unicode(gpt_message.get('content', '')))
         set_user_follow_up_action(user_id, False)
 
-    def check_inactivity(self, threshold_minutes=60):
+    def check_inactivity(self, threshold_minutes=1440):
         now = datetime.utcnow()
         for user_data in get_all_chat():
             last_update = user_data.get('updated_at')
