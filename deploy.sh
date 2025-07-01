@@ -1,4 +1,4 @@
-VENV_DIR="/venv"
+VENV_DIR="venv"
 
 echo ">>> Pull latest code from Git..."
 git pull origin master || { echo "Git pull failed"; exit 1; }
