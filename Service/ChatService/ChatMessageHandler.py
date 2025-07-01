@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
 import re
 import time
-import threading
+import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
+
+from cachetools import TTLCache
 
 from Database.Connection import post_chat, get_chat_by_userid, get_follow_up_keywords
 from Database.SheetConnection import get_user_existed_on_sheet
 from Service.ChatService import IChatService
 from Service.MessageService import MessageClient
 
-processed_message_ids = set()
+# TTL cache: auto-expire message_id after 5 minutes
+processed_message_ids = TTLCache(maxsize=10000, ttl=300)
 message_buffers = defaultdict(list)
-debounce_timers = {}
-DEBOUNCE_DELAY_SECONDS = 10
+debounce_tasks = {}  # sender_id -> asyncio.Task
+DEBOUNCE_DELAY_SECONDS = 5
 
 
 @dataclass
@@ -34,10 +37,10 @@ class ChatMessageHandler:
             return
 
         if message_id in processed_message_ids:
-            print(f"⚠️ Đã xử lý message_id: {message_id}, bỏ qua.")
+            print(f"⚠️ Already processed message_id: {message_id}, skipping.")
             return
 
-        processed_message_ids.add(message_id)
+        processed_message_ids[message_id] = time.time()
 
         sender_id = event['sender']['id']
         recipient_id = event['recipient']['id']
@@ -69,23 +72,30 @@ class ChatMessageHandler:
 
     def debounce_user_message(self, sender_id, message_text):
         message_buffers[sender_id].append(message_text)
+        print(f"[📩] Received message from {sender_id}: {message_text}")
 
-        if sender_id in debounce_timers:
-            debounce_timers[sender_id].cancel()
+        task = debounce_tasks.get(sender_id)
+        if task and not task.done():
+            task.cancel()
+            print(f"[♻️] Reset debounce for {sender_id}")
 
-        timer = threading.Timer(
-            DEBOUNCE_DELAY_SECONDS,
-            self.debounce_process_message,
-            args=(sender_id,)
-        )
-        debounce_timers[sender_id] = timer
-        timer.start()
+        new_task = asyncio.create_task(self.debounce_process_message_async(sender_id))
+        debounce_tasks[sender_id] = new_task
 
-    def debounce_process_message(self, sender_id):
-        # ✅ Loại trùng nội dung giữ thứ tự
+    async def debounce_process_message_async(self, sender_id):
+        print(f"[🕒] Waiting {DEBOUNCE_DELAY_SECONDS}s for {sender_id}...")
+        await asyncio.sleep(DEBOUNCE_DELAY_SECONDS)
+
         message_texts = list(dict.fromkeys(message_buffers[sender_id]))
         full_message = "\n".join(message_texts)
         message_buffers[sender_id].clear()
+        debounce_tasks.pop(sender_id, None)
+
+        if not full_message:
+            print(f"[⚠️] No messages to process for {sender_id}")
+            return
+
+        print(f"[✅] Debounced processing for {sender_id}: {full_message[:40]}...")
 
         try:
             response = self.chat_service.ask(full_message, sender_id)
@@ -110,7 +120,6 @@ class ChatMessageHandler:
                 main, followup = self.split_main_and_followup(text_part, sender_id)
 
                 post_chat(sender_id, [{"role": "user", "content": full_message}], is_update=True)
-
                 self.messenger.send_message_with_no_logs(sender_id, main)
                 post_chat(sender_id, [{"role": "assistant", "content": main}], is_update=False)
 
@@ -120,7 +129,7 @@ class ChatMessageHandler:
                     post_chat(sender_id, [{"role": "assistant", "content": followup}], is_update=False)
 
         except Exception as e:
-            print(f"❌ Error during debounce processing for user {sender_id}: {e}")
+            print(f"❌ Error during async debounce processing for user {sender_id}: {e}")
 
     @staticmethod
     def split_text_and_json(response_text):
