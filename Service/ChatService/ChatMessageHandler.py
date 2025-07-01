@@ -29,7 +29,7 @@ class ChatMessageHandler:
 
     def handle_message_event(self, event):
         message = event.get('message')
-        message_id = message.get('mid')
+        message_id = message.get('mid', '')
         if not message_id:
             return
 
