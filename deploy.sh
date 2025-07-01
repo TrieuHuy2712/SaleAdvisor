@@ -1,7 +1,7 @@
 VENV_DIR="/venv"
 
 echo ">>> Pull latest code from Git..."
-git pull origin main || { echo "Git pull failed"; exit 1; }
+git pull origin master || { echo "Git pull failed"; exit 1; }
 
 echo ">>> Activate virtual environment..."
 source "$VENV_DIR/bin/activate" || { echo "Cannot venv tại $VENV_DIR"; exit 1; }
