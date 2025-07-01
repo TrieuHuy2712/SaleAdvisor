@@ -1,0 +1,20 @@
+VENV_DIR="/venv"
+
+echo ">>> Pull latest code from Git..."
+git pull origin main || { echo "Git pull failed"; exit 1; }
+
+echo ">>> Activate virtual environment..."
+source "$VENV_DIR/bin/activate" || { echo "Cannot venv tại $VENV_DIR"; exit 1; }
+
+echo ">>> Install required libraries..."
+pip install -r requirements.txt || { echo "Install required libraries failed"; exit 1; }
+
+echo ">>> Reload + restart service chatbot..."
+sudo systemctl daemon-reload
+sudo systemctl restart chatbot.service
+
+echo ">>> Status chatbot.service:"
+sudo systemctl status chatbot.service
+
+# if you want to run the chatbot service in the background, uncomment the line below
+# sudo cp sale_advisor_deploy.sh /SaleAdvisor/deploy.sh
