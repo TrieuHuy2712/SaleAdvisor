@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 import re
 import time
-import threading
-from collections import defaultdict
 from dataclasses import dataclass
 
 from Database.Connection import post_chat, get_chat_by_userid, get_follow_up_keywords
@@ -103,61 +101,6 @@ class ChatMessageHandler:
               and sender_id == self.fb_page_id
               and not self.messenger.check_permission_auto_message(recipient_id)):
             post_chat(recipient_id, [{"role": "assistant", "content": message_text}], is_update=False)
-
-    def debounce_user_message(self, sender_id, message_text):
-        message_buffers[sender_id].append(message_text)
-
-        if sender_id in debounce_timers:
-            debounce_timers[sender_id].cancel()
-
-        timer = threading.Timer(
-            DEBOUNCE_DELAY_SECONDS,
-            self.debounce_process_message,
-            args=(sender_id,)
-        )
-        debounce_timers[sender_id] = timer
-        timer.start()
-
-    def debounce_process_message(self, sender_id):
-        # ✅ Loại trùng nội dung giữ thứ tự
-        message_texts = list(dict.fromkeys(message_buffers[sender_id]))
-        full_message = "\n".join(message_texts)
-        message_buffers[sender_id].clear()
-
-        try:
-            response = self.chat_service.ask(full_message, sender_id)
-
-            if response.get("function_call"):
-                self.messenger.send_introduce_message(sender_id)
-                time.sleep(2)
-                self.messenger.send_image(sender_id)
-
-            content = response.get("content", "")
-            content = self.chat_service.convert_markdown_bold_to_unicode(content)
-            text_part, json_part = self.split_text_and_json(content)
-
-            if text_part == "booking":
-                self.messenger.send_booking_message(sender_id, message_text=full_message)
-                return
-
-            if json_part:
-                self.messenger.send_message(sender_id, (text_part, json_part), full_message)
-                return
-            else:
-                main, followup = self.split_main_and_followup(text_part, sender_id)
-
-                post_chat(sender_id, [{"role": "user", "content": full_message}], is_update=True)
-
-                self.messenger.send_message_with_no_logs(sender_id, main)
-                post_chat(sender_id, [{"role": "assistant", "content": main}], is_update=False)
-
-                if followup or followup != "\n\n":
-                    time.sleep(3)
-                    self.messenger.send_message_with_no_logs(sender_id, followup)
-                    post_chat(sender_id, [{"role": "assistant", "content": followup}], is_update=False)
-
-        except Exception as e:
-            print(f"❌ Error during debounce processing for user {sender_id}: {e}")
 
     @staticmethod
     def split_text_and_json(response_text):
