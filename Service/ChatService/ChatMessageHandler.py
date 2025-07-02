@@ -58,7 +58,8 @@ class ChatMessageHandler:
         print(f"📩 Message from {sender_id}: {message_text}")
 
         "Check chat bot is active "
-        if sender_id != self.fb_page_id and not self.get_user_existed_on_cached(sender_id) and not get_user_existed_on_sheet(sender_id):
+        if sender_id != self.fb_page_id and not self.get_user_existed_on_cached(
+                sender_id) and not get_user_existed_on_sheet(sender_id):
             print(f"📩 User {sender_id} not found in sheet, adding to sheet. có message {message_text}")
             self.set_cached_permission(sender_id)
             self.messenger.save_user(sender_id, True)
@@ -173,9 +174,8 @@ class ChatMessageHandler:
 
     @staticmethod
     def has_answer_been_sent(history_messages: list, followup_keywords: list) -> bool:
-        for msg in history_messages:
-            if msg["role"] == "assistant":
-                content_lower = msg["content"].lower()
-                if any(kw in content_lower for kw in followup_keywords):
-                    return True
-        return False
+        return any(
+            msg.get("role") == "assistant" and
+            any(kw in msg.get("content", "").lower() for kw in followup_keywords)
+            for msg in (history_messages or [])
+        )
