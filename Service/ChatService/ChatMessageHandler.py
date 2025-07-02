@@ -4,6 +4,8 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 
+from cachetools import TTLCache
+
 from Database.Connection import post_chat, get_chat_by_userid, get_follow_up_keywords
 from Database.SheetConnection import get_user_existed_on_sheet
 from Service.ChatService import IChatService
@@ -15,6 +17,7 @@ processed_message_ids = TTLCache(maxsize=10000, ttl=300)
 message_buffers = defaultdict(list)
 debounce_timers = {}
 DEBOUNCE_DELAY_SECONDS = 10
+permission_cache = TTLCache(maxsize=10000, ttl=300)
 
 
 @dataclass
@@ -54,12 +57,14 @@ class ChatMessageHandler:
         print(f"📩 Message from {sender_id}: {message_text}")
 
         "Check chat bot is active "
-        if not get_user_existed_on_sheet(sender_id) and sender_id != self.fb_page_id:
+        if sender_id != self.fb_page_id and not get_user_existed_on_sheet(sender_id):
+            print(f"📩 User {sender_id} not found in sheet, adding to sheet.")
+            self.set_cached_permission(sender_id)
             self.messenger.save_user(sender_id, True)
 
-        if (message_text
-            and self.messenger.check_permission_auto_message(sender_id)) \
-                and sender_id != self.fb_page_id:
+        permission_user = self.get_cached_permission(sender_id)
+
+        if message_text and permission_user and sender_id != self.fb_page_id:
             try:
                 response = self.chat_service.ask(message_text, sender_id)
 
@@ -74,6 +79,7 @@ class ChatMessageHandler:
 
                 if text_part == "booking":
                     self.messenger.send_booking_message(sender_id, message_text=message_text)
+                    self.set_cached_permission(sender_id, False)  # Disable follow-up permission after booking
                     return
 
                 if json_part:
@@ -90,7 +96,7 @@ class ChatMessageHandler:
                     post_chat(sender_id, [{"role": "assistant", "content": main}], is_update=False)
 
                     # Follow-up Chat
-                    if followup or followup != "\n\n":
+                    if followup or followup != "\n\n" or followup != "":
                         time.sleep(3)  # Delay to avoid rate limiting
                         self.messenger.send_message_with_no_logs(sender_id, followup)
                         post_chat(sender_id, [{"role": "assistant", "content": followup}], is_update=False)
@@ -98,13 +104,30 @@ class ChatMessageHandler:
             except Exception as e:
                 print(f"❌ Error processing message: {e}")
         elif (message_text
-              and not self.messenger.check_permission_auto_message(sender_id)
+              and not permission_user
               and sender_id != self.fb_page_id):  # Case when chatbot turned off and user sends a message
             post_chat(sender_id, [{"role": "user", "content": message_text}])
         elif (message_text  # Case when chatbot turned off and page sends a message
               and sender_id == self.fb_page_id
-              and not self.messenger.check_permission_auto_message(recipient_id)):
+              and not permission_user):
             post_chat(recipient_id, [{"role": "assistant", "content": message_text}], is_update=False)
+
+    @staticmethod
+    def set_cached_permission(user_id, value=True):
+        permission_cache[user_id] = value
+
+    def get_cached_permission(self, user_id):
+        cached_data = permission_cache.get(user_id)
+        if cached_data is not None:
+            return cached_data[0]  # chỉ trả về giá trị, không timestamp
+        else:
+            permission = self.messenger.check_permission_follow_up(user_id)
+            self.set_cached_permission(user_id, permission)
+            return permission
+
+    # def get_user_existed_on_cached(self, user_id):
+    #     cached_data = permission_cache.get(user_id)
+    #     return cached_data is not None and cached_data[0]  # chỉ trả về giá trị, không timestamp
 
     @staticmethod
     def split_text_and_json(response_text):
