@@ -52,7 +52,7 @@ class ChatMessageHandler:
         print(f"📩 Message from {sender_id}: {message_text}")
 
         "Check chat bot is active "
-        if sender_id != self.fb_page_id and not get_user_existed_on_sheet(sender_id):
+        if sender_id != self.fb_page_id and not self.get_user_existed_on_cached(sender_id) and not get_user_existed_on_sheet(sender_id):
             print(f"📩 User {sender_id} not found in sheet, adding to sheet.")
             self.set_cached_permission(sender_id)
             self.messenger.save_user(sender_id, True)
@@ -117,13 +117,14 @@ class ChatMessageHandler:
         if isinstance(cached_data, tuple):
             return cached_data[0]  # Trả về giá trị True/False
         else:
-            permission = self.messenger.check_permission_follow_up(user_id)
+            permission = self.messenger.check_permission_auto_message(user_id)
             self.set_cached_permission(user_id, permission)
             return permission
 
-    # def get_user_existed_on_cached(self, user_id):
-    #     cached_data = permission_cache.get(user_id)
-    #     return cached_data is not None and cached_data[0]  # chỉ trả về giá trị, không timestamp
+    @staticmethod
+    def get_user_existed_on_cached(user_id):
+        cached_data = permission_cache.get(user_id)
+        return cached_data is not None
 
     @staticmethod
     def split_text_and_json(response_text):
