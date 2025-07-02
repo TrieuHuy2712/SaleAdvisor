@@ -58,7 +58,7 @@ class ChatMessageHandler:
 
         "Check chat bot is active "
         if sender_id != self.fb_page_id and not self.get_user_existed_on_cached(sender_id) and not get_user_existed_on_sheet(sender_id):
-            print(f"📩 User {sender_id} not found in sheet, adding to sheet.")
+            print(f"📩 User {sender_id} not found in sheet, adding to sheet. có message {message_text}")
             self.set_cached_permission(sender_id)
             self.messenger.save_user(sender_id, True)
 
@@ -66,6 +66,7 @@ class ChatMessageHandler:
 
         if message_text and permission_user and sender_id != self.fb_page_id:
             try:
+                print(f"📩 Processing message from {sender_id}: {message_text}")
                 response = self.chat_service.ask(message_text, sender_id)
 
                 if response.get("function_call"):
@@ -79,7 +80,7 @@ class ChatMessageHandler:
 
                 if text_part == "booking":
                     self.messenger.send_booking_message(sender_id, message_text=message_text)
-                    self.set_cached_permission(sender_id, False)  # Disable follow-up permission after booking
+                    self.set_cached_permission(sender_id, False)  # Disable chatbot after book
                     return
 
                 if json_part:
