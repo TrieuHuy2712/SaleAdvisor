@@ -2,6 +2,7 @@
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime
 
 from Database.Connection import post_chat, get_chat_by_userid, get_follow_up_keywords
 from Database.SheetConnection import get_user_existed_on_sheet
@@ -28,20 +29,23 @@ class ChatMessageHandler:
             self.handle_message_event(event)
 
     def handle_message_event(self, event):
-        message = event.get('message')
-        message_id = message.get('mid', '')
-        if not message_id:
-            return
+        message = event.get('message', {})
+        message_id = message.get('mid')
 
-        if message_id in processed_message_ids:
-            print(f"⚠️ Đã xử lý message_id: {message_id}, bỏ qua.")
-            return
+        if message_id:
+            if message_id in processed_message_ids:
+                print(f"⚠️ Đã xử lý message_id: {message_id}, bỏ qua.")
+                return
+            processed_message_ids.add(message_id)
+        else:
+            print("⚠️ Message không có mid — vẫn xử lý tiếp.")
 
         processed_message_ids.add(message_id)
 
         sender_id = event['sender']['id']
         recipient_id = event['recipient']['id']
         message_text = event.get('message', {}).get('text')
+        print(f"Received message_id: {message_id} from {sender_id} at {datetime.now()}")
 
         if sender_id == recipient_id:
             print(f"📩 Ignoring message from self: {sender_id}")
