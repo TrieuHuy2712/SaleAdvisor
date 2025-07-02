@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
 import time
+import traceback
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -99,6 +100,7 @@ class ChatMessageHandler:
 
             except Exception as e:
                 print(f"❌ Error processing message: {e}")
+                traceback.print_exc()
         elif (message_text
               and not permission_user
               and sender_id != self.fb_page_id):  # Case when chatbot turned off and user sends a message
