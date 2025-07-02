@@ -109,12 +109,13 @@ class ChatMessageHandler:
 
     @staticmethod
     def set_cached_permission(user_id, value=True):
-        permission_cache[user_id] = value
+        now = time.time()
+        permission_cache[user_id] = (value, now)
 
     def get_cached_permission(self, user_id):
         cached_data = permission_cache.get(user_id)
-        if cached_data is not None:
-            return cached_data[0]  # chỉ trả về giá trị, không timestamp
+        if isinstance(cached_data, tuple):
+            return cached_data[0]  # Trả về giá trị True/False
         else:
             permission = self.messenger.check_permission_follow_up(user_id)
             self.set_cached_permission(user_id, permission)
