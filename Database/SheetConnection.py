@@ -25,9 +25,11 @@ def get_google_sheet(sheet_name):
         client = gspread.authorize(creds)
         sheet = client.open_by_key(SHEET_KEY).worksheet(sheet_name)
         return sheet
+    except gspread.exceptions.APIError as e:
+        print(f"❌ Google Sheets API error: {e}")
     except Exception as e:
         print(f"❌ Error connecting to Google Sheet: {e}")
-        raise
+    return None
 
 
 def save_booking_to_sheet(user_id, user_name, message_text):
