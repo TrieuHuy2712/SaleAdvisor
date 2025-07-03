@@ -17,8 +17,7 @@ from Service.MessageService import MessageClient
 processed_message_ids = TTLCache(maxsize=10000, ttl=300)
 message_buffers = defaultdict(list)
 debounce_timers = {}
-DEBOUNCE_DELAY_SECONDS = 10
-processed_message_ids = set()
+DEBOUNCE_DELAY_SECONDS = 5
 permission_cache = TTLCache(maxsize=10000, ttl=300)
 
 
@@ -41,11 +40,9 @@ class ChatMessageHandler:
             if message_id in processed_message_ids:
                 print(f"⚠️ Đã xử lý message_id: {message_id}, bỏ qua.")
                 return
-            processed_message_ids.add(message_id)
+            processed_message_ids[message_id] = True
         else:
             print("⚠️ Message không có mid — vẫn xử lý tiếp.")
-
-        processed_message_ids.add(message_id)
 
         sender_id = event['sender']['id']
         recipient_id = event['recipient']['id']
@@ -58,19 +55,50 @@ class ChatMessageHandler:
 
         print(f"📩 Message from {sender_id}: {message_text}")
 
-        "Check chat bot is active "
+        if not get_user_existed_on_sheet(sender_id) and sender_id != self.fb_page_id:
+            self.messenger.save_user(sender_id, True)
+
+        if message_text and self.messenger.check_permission_auto_message(sender_id) and sender_id != self.fb_page_id:
+            self.debounce_user_message(sender_id, message_text)
+
+        elif message_text and not self.messenger.check_permission_auto_message(
+                sender_id) and sender_id != self.fb_page_id:
+            post_chat(sender_id, [{"role": "user", "content": message_text}])
+
+        elif message_text and sender_id == self.fb_page_id and not self.get_cached_permission(recipient_id):
+            post_chat(recipient_id, [{"role": "assistant", "content": message_text}], is_update=False)
+
+    def debounce_user_message(self, sender_id, message_text):
+        message_buffers[sender_id].append(message_text)
+
+        if sender_id in debounce_timers:
+            debounce_timers[sender_id].cancel()
+
+        timer = threading.Timer(
+            DEBOUNCE_DELAY_SECONDS,
+            self.debounce_process_message,
+            args=(sender_id,)
+        )
+        debounce_timers[sender_id] = timer
+        timer.start()
+
+    def debounce_process_message(self, sender_id):
+        message_texts = list(dict.fromkeys(message_buffers[sender_id]))
+        full_message = "\n".join(message_texts)
+        message_buffers[sender_id].clear()
+
         if sender_id != self.fb_page_id and not self.get_user_existed_on_cached(
                 sender_id) and not get_user_existed_on_sheet(sender_id):
-            print(f"📩 User {sender_id} not found in sheet, adding to sheet. có message {message_text}")
+            print(f"📩 User {sender_id} not found in sheet, adding to sheet. có message {full_message}")
             self.set_cached_permission(sender_id)
             self.messenger.save_user(sender_id, True)
 
         permission_user = self.get_cached_permission(sender_id)
 
-        if message_text and permission_user and sender_id != self.fb_page_id:
+        if full_message and permission_user and sender_id != self.fb_page_id:
             try:
-                print(f"📩 Processing message from {sender_id}: {message_text}")
-                response = self.chat_service.ask(message_text, sender_id)
+                print(f"📩 Processing message from {sender_id}: {full_message}")
+                response = self.chat_service.ask(full_message, sender_id)
 
                 if response.get("function_call"):
                     self.messenger.send_introduce_message(sender_id)
@@ -82,8 +110,8 @@ class ChatMessageHandler:
                 text_part, json_part = self.split_text_and_json(content)
 
                 if text_part == "booking":
-                    self.messenger.send_booking_message(sender_id, message_text=message_text)
-                    self.set_cached_permission(sender_id, False)  # Disable chatbot after book
+                    self.messenger.send_booking_message(sender_id, message_text=full_message)
+                    self.set_cached_permission(sender_id, False)
                     return
 
                 if json_part:
@@ -96,42 +124,30 @@ class ChatMessageHandler:
                     self.messenger.send_message_with_no_logs(sender_id, main)
                     post_chat(sender_id, [{"role": "assistant", "content": main}], is_update=False)
 
-                    # Follow-up Chat
                     if followup.strip():
-                        time.sleep(3)  # Delay to avoid rate limiting
+                        time.sleep(3)
                         self.messenger.send_message_with_no_logs(sender_id, followup)
                         post_chat(sender_id, [{"role": "assistant", "content": followup}], is_update=False)
 
             except Exception as e:
                 print(f"❌ Error processing message: {e}")
                 traceback.print_exc()
-        elif (message_text
-              and not permission_user
-              and sender_id != self.fb_page_id):  # Case when chatbot turned off and user sends a message
-            post_chat(sender_id, [{"role": "user", "content": message_text}])
-        elif (message_text  # Case when chatbot turned off and page sends a message
-              and sender_id == self.fb_page_id
-              and not permission_user):
-            post_chat(recipient_id, [{"role": "assistant", "content": message_text}], is_update=False)
 
     @staticmethod
     def set_cached_permission(user_id, value=True):
-        now = time.time()
-        permission_cache[user_id] = (value, now)
+        permission_cache[user_id] = value
 
     def get_cached_permission(self, user_id):
         cached_data = permission_cache.get(user_id)
-        if isinstance(cached_data, tuple):
-            return cached_data[0]  # Trả về giá trị True/False
-        else:
-            permission = self.messenger.check_permission_auto_message(user_id)
-            self.set_cached_permission(user_id, permission)
-            return permission
+        if cached_data is not None:
+            return cached_data
+        permission = self.messenger.check_permission_auto_message(user_id)
+        self.set_cached_permission(user_id, permission)
+        return permission
 
     @staticmethod
     def get_user_existed_on_cached(user_id):
-        cached_data = permission_cache.get(user_id)
-        return cached_data is not None
+        return user_id in permission_cache
 
     @staticmethod
     def split_text_and_json(response_text):
