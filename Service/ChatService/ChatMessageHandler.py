@@ -69,7 +69,8 @@ class ChatMessageHandler:
             post_chat(recipient_id, [{"role": "assistant", "content": message_text}], is_update=False)
 
     def debounce_user_message(self, sender_id, message_text):
-        message_buffers[sender_id].append(message_text)
+        if message_text not in message_buffers[sender_id]:
+            message_buffers[sender_id].append(message_text)
 
         if sender_id in debounce_timers:
             debounce_timers[sender_id].cancel()
