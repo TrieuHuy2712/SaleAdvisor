@@ -29,12 +29,14 @@ class OpenAIChatService(IChatService):
 
         welcome_prompt = get_welcome_prompt() + "\n" if not chat_history else ""
 
+        formatted_faq_text = self.format_faq_data(faq_data)
+
         # System prompt with FAQ
         system_message = {
             "role": "system",
             "content": get_prompt() + "\n" +
                        welcome_prompt + "Các thông tin FAQ có sẵn là:\n" +
-                       '\n'.join([f"{k}: {v}" for k, v in faq_data.items()])
+                       formatted_faq_text
         }
 
         # Build messages list
@@ -54,6 +56,34 @@ class OpenAIChatService(IChatService):
         )
 
         return response['choices'][0]['message']
+
+    def parse_faq_entry(self, entry: str) -> dict:
+        parts = entry.split(',')
+        result = {}
+        for part in parts:
+            if ':' in part:
+                key, value = part.split(':', 1)
+                result[key.strip()] = value.strip()
+        return result
+
+    def format_faq_data(self, faq_data: dict) -> str:
+        lines = []
+        for key, value in faq_data.items():
+            if isinstance(value, list):
+                lines.append(f"{key}:")
+                for item in value:
+                    parsed = self.parse_faq_entry(item)
+                    name = parsed.get("tên", "")
+                    price = parsed.get("giá", "")
+                    duration = parsed.get("thời_gian", "")
+                    line = f"- {name}: {price}"
+                    if duration:
+                        line += f" (thời gian: {duration})"
+                    lines.append(line)
+            else:
+                lines.append(f"{key}: {value}")
+            lines.append("")  # dòng trống giữa các nhóm
+        return "\n".join(lines)
 
     def ask_follow_up(self, user_id: str, hour_diff: int) -> dict:
         """
