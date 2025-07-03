@@ -14,11 +14,12 @@ from Database.SheetConnection import get_user_existed_on_sheet
 from Service.ChatService import IChatService
 from Service.MessageService import MessageClient
 
+# Caching setup
 processed_message_ids = TTLCache(maxsize=10000, ttl=300)
 message_buffers = defaultdict(list)
 debounce_timers = {}
-DEBOUNCE_DELAY_SECONDS = 5
 permission_cache = TTLCache(maxsize=10000, ttl=300)
+DEBOUNCE_DELAY_SECONDS = 5
 
 
 @dataclass
@@ -28,120 +29,109 @@ class ChatMessageHandler:
     fb_page_id: str
 
     def handle_entry(self, entry):
-        messaging_events = entry.get('messaging', [])
-        for event in messaging_events:
+        for event in entry.get('messaging', []):
             self.handle_message_event(event)
 
     def handle_message_event(self, event):
         message = event.get('message', {})
         message_id = message.get('mid')
+        message_text = message.get('text')
+        sender_id = event['sender']['id']
+        recipient_id = event['recipient']['id']
+
+        if sender_id == recipient_id:
+            print(f"📩 Ignored self-sent message from: {sender_id}")
+            return
+
+        print(f"📨 Received message_id: {message_id} | From: {sender_id} | Text: {message_text}")
 
         if message_id:
             if message_id in processed_message_ids:
-                print(f"⚠️ Đã xử lý message_id: {message_id}, bỏ qua.")
+                print(f"⚠️ Already processed message_id: {message_id}, skipping.")
                 return
             processed_message_ids[message_id] = True
         else:
-            print("⚠️ Message không có mid — vẫn xử lý tiếp.")
+            print("⚠️ Message has no 'mid' — continuing anyway.")
 
-        sender_id = event['sender']['id']
-        recipient_id = event['recipient']['id']
-        message_text = event.get('message', {}).get('text')
-        print(f"Received message_id: {message_id} from {sender_id} at {datetime.now()}")
-
-        if sender_id == recipient_id:
-            print(f"📩 Ignoring message from self: {sender_id}")
-            return
-
-        print(f"📩 Message from {sender_id}: {message_text}")
-
-        if not get_user_existed_on_sheet(sender_id) and sender_id != self.fb_page_id:
-            self.messenger.save_user(sender_id, True)
-
-        if message_text and self.messenger.check_permission_auto_message(sender_id) and sender_id != self.fb_page_id:
-            self.debounce_user_message(sender_id, message_text)
-
-        elif message_text and not self.messenger.check_permission_auto_message(
-                sender_id) and sender_id != self.fb_page_id:
-            post_chat(sender_id, [{"role": "user", "content": message_text}])
-
-        elif message_text and sender_id == self.fb_page_id and not self.get_cached_permission(recipient_id):
-            post_chat(recipient_id, [{"role": "assistant", "content": message_text}], is_update=False)
+        self.debounce_user_message(sender_id, message_text)
 
     def debounce_user_message(self, sender_id, message_text):
-        if message_text not in message_buffers[sender_id]:
+        if message_text and message_text not in message_buffers[sender_id]:
             message_buffers[sender_id].append(message_text)
 
         if sender_id in debounce_timers:
             debounce_timers[sender_id].cancel()
 
-        timer = threading.Timer(
+        debounce_timers[sender_id] = threading.Timer(
             DEBOUNCE_DELAY_SECONDS,
             self.debounce_process_message,
             args=(sender_id,)
         )
-        debounce_timers[sender_id] = timer
-        timer.start()
+        debounce_timers[sender_id].start()
 
     def debounce_process_message(self, sender_id):
-        message_texts = list(dict.fromkeys(message_buffers[sender_id]))
-        full_message = "\n".join(message_texts)
+        raw_messages = message_buffers[sender_id]
+        unique_messages = list(dict.fromkeys(raw_messages))
+        full_message = "\n".join(unique_messages)
         message_buffers[sender_id].clear()
+
+        if not full_message.strip():
+            print(f"⚠️ Empty message from {sender_id}, skipping.")
+            return
 
         if sender_id != self.fb_page_id and not self.get_user_existed_on_cached(
                 sender_id) and not get_user_existed_on_sheet(sender_id):
-            print(f"📩 User {sender_id} not found in sheet, adding to sheet. có message {full_message}")
+            print(f"📝 Adding new user {sender_id} to sheet (message: {full_message})")
             self.set_cached_permission(sender_id)
             self.messenger.save_user(sender_id, True)
 
-        permission_user = self.get_cached_permission(sender_id)
+        if not self.get_cached_permission(sender_id) or sender_id == self.fb_page_id:
+            return
 
-        if full_message and permission_user and sender_id != self.fb_page_id:
-            try:
-                print(f"📩 Processing message from {sender_id}: {full_message}")
-                response = self.chat_service.ask(full_message, sender_id)
+        try:
+            print(f"🤖 Sending message to ChatService from {sender_id}:\n{full_message}")
+            response = self.chat_service.ask(full_message, sender_id)
+            content = self.chat_service.convert_markdown_bold_to_unicode(response.get("content", ""))
 
-                if response.get("function_call"):
-                    self.messenger.send_introduce_message(sender_id)
-                    time.sleep(2)
-                    self.messenger.send_image(sender_id)
+            if response.get("function_call"):
+                self.messenger.send_introduce_message(sender_id)
+                time.sleep(2)
+                self.messenger.send_image(sender_id)
+                return
 
-                content = response.get("content", "")
-                content = self.chat_service.convert_markdown_bold_to_unicode(content)
-                text_part, json_part = self.split_text_and_json(content)
+            text_part, json_part = self.split_text_and_json(content)
 
-                if text_part == "booking":
-                    self.messenger.send_booking_message(sender_id, message_text=full_message)
-                    self.set_cached_permission(sender_id, False)
-                    return
+            if text_part == "booking":
+                self.messenger.send_booking_message(sender_id, message_text=full_message)
+                self.set_cached_permission(sender_id, False)
+                return
 
-                if json_part:
-                    self.messenger.send_message(sender_id, (text_part, json_part), full_message)
-                    return
-                else:
-                    main, followup = self.split_main_and_followup(text_part, sender_id)
+            if json_part:
+                self.messenger.send_message(sender_id, (text_part, json_part), full_message)
+                return
 
-                    post_chat(sender_id, [{"role": "user", "content": full_message}], is_update=True)
-                    self.messenger.send_message_with_no_logs(sender_id, main)
-                    post_chat(sender_id, [{"role": "assistant", "content": main}], is_update=False)
+            main, followup = self.split_main_and_followup(text_part, sender_id)
 
-                    if followup.strip():
-                        time.sleep(3)
-                        self.messenger.send_message_with_no_logs(sender_id, followup)
-                        post_chat(sender_id, [{"role": "assistant", "content": followup}], is_update=False)
+            post_chat(sender_id, [{"role": "user", "content": full_message}], is_update=True)
+            self.messenger.send_message_with_no_logs(sender_id, main)
+            post_chat(sender_id, [{"role": "assistant", "content": main}], is_update=False)
 
-            except Exception as e:
-                print(f"❌ Error processing message: {e}")
-                traceback.print_exc()
+            if followup.strip():
+                time.sleep(3)
+                self.messenger.send_message_with_no_logs(sender_id, followup)
+                post_chat(sender_id, [{"role": "assistant", "content": followup}], is_update=False)
+
+        except Exception as e:
+            print(f"❌ Error while processing message from {sender_id}: {e}")
+            traceback.print_exc()
 
     @staticmethod
     def set_cached_permission(user_id, value=True):
         permission_cache[user_id] = value
 
     def get_cached_permission(self, user_id):
-        cached_data = permission_cache.get(user_id)
-        if cached_data is not None:
-            return cached_data
+        if user_id in permission_cache:
+            return permission_cache[user_id]
         permission = self.messenger.check_permission_auto_message(user_id)
         self.set_cached_permission(user_id, permission)
         return permission
@@ -168,16 +158,16 @@ class ChatMessageHandler:
 
     def split_main_and_followup(self, text: str, user_id: str) -> tuple:
         blocks = text.strip().split("\n\n")
-        chat_history = get_chat_by_userid(user_id=user_id)
         follow_up_keywords = get_follow_up_keywords()
+        history = get_chat_by_userid(user_id)
 
-        main_reply = [block for block in blocks if not any(kw in block.lower() for kw in follow_up_keywords)]
-        followup = [block for block in blocks if any(kw in block.lower() for kw in follow_up_keywords)]
+        main = [b for b in blocks if not any(kw in b.lower() for kw in follow_up_keywords)]
+        followup = [b for b in blocks if any(kw in b.lower() for kw in follow_up_keywords)]
 
-        if followup and self.has_answer_been_sent(chat_history, follow_up_keywords):
+        if followup and self.has_answer_been_sent(history, follow_up_keywords):
             followup = []
 
-        return "\n\n".join(main_reply), "\n\n".join(followup)
+        return "\n\n".join(main), "\n\n".join(followup)
 
     @staticmethod
     def has_answer_been_sent(history_messages: list, followup_keywords: list) -> bool:
