@@ -91,13 +91,14 @@ class ChatMessageHandler:
         try:
             print(f"🤖 Sending message to ChatService from {sender_id}:\n{full_message}")
             response = self.chat_service.ask(full_message, sender_id)
-            content = self.chat_service.convert_markdown_bold_to_unicode(response.get("content", ""))
 
             if response.get("function_call"):
                 self.messenger.send_introduce_message(sender_id)
                 time.sleep(2)
                 self.messenger.send_image(sender_id)
                 return
+
+            content = self.chat_service.convert_markdown_bold_to_unicode(response.get("content", ""))
 
             text_part, json_part = self.split_text_and_json(content)
 
