@@ -57,7 +57,8 @@ class OpenAIChatService(IChatService):
 
         reply = response['choices'][0]['message']
         content = reply.get("content", "")
-        content = self.correct_price_in_response(content)
+        if isinstance(content, str):
+            content = self.correct_price_in_response(content)
         reply["content"] = content
 
         return reply
