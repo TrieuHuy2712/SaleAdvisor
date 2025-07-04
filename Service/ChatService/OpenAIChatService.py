@@ -55,9 +55,27 @@ class OpenAIChatService(IChatService):
             # max_tokens=150,
         )
 
-        return response['choices'][0]['message']
+        reply = response['choices'][0]['message']
+        content = reply.get("content", "")
+        content = self.correct_price_in_response(content)
+        reply["content"] = content
 
-    def parse_faq_entry(self, entry: str) -> dict:
+        return reply
+
+    @staticmethod
+    def correct_price_in_response(text: str) -> str:
+        # Thay mọi giá sai thuộc dạng 3xx.000đ/1 suất thành 350.000đ/1 suất
+        text = re.sub(
+            r"\b3\d{2}\.000đ/1 suất\b",  # bắt đúng pattern giá 3xx.000đ/1 suất
+            "350.000đ/1 suất",
+            text
+        )
+
+        # Có thể thêm tương tự cho các giá khác nếu cần
+        return text
+
+    @staticmethod
+    def parse_faq_entry(entry: str) -> dict:
         parts = entry.split(',')
         result = {}
         for part in parts:
