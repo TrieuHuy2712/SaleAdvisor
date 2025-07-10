@@ -65,14 +65,33 @@ class OpenAIChatService(IChatService):
 
     @staticmethod
     def correct_price_in_response(text: str) -> str:
-        # Thay mọi giá sai thuộc dạng 3xx.000đ/1 suất thành 350.000đ/1 suất
-        text = re.sub(
-            r"\b3\d{2}\.000đ/1 suất\b",  # bắt đúng pattern giá 3xx.000đ/1 suất
-            "350.000đ/1 suất",
-            text
-        )
+        # Bảng ánh xạ số thường <-> số Unicode in đậm
+        digit_to_bold = str.maketrans("0123456789", "𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵")
+        bold_to_digit = str.maketrans("𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵", "0123456789")
 
-        # Có thể thêm tương tự cho các giá khác nếu cần
+        # Hàm chuyển số thường thành Unicode in đậm
+        def to_bold_digits(s):
+            return s.translate(digit_to_bold)
+
+        # Hàm normalize số Unicode về số thường
+        def normalize_digits(s):
+            return s.translate(bold_to_digit)
+
+        # Bước 1: Tìm tất cả các chuỗi giá tiền dạng đậm như 𝟯𝟭𝟬.𝟬𝟬𝟬đ/𝟭 𝘀𝘂ấ𝘁
+        pattern = r"([𝟬-𝟵]{3})\.([𝟬-𝟵]{3})đ/([𝟬-𝟵])"
+        matches = re.findall(pattern, text)
+
+        # Bước 2: Xử lý từng chuỗi
+        for match in matches:
+            bold_price = f"{match[0]}.{match[1]}đ/{match[2]}"
+            plain_price = normalize_digits(bold_price)
+
+            # Nếu là giá trong khoảng 3xx.000 thì thay
+            if re.match(r"3\d{2}\.000đ/1", plain_price):
+                # Thay thế bằng 350.000 (dưới dạng đậm)
+                new_bold_price = to_bold_digits("350.000") + "đ/" + to_bold_digits("1")
+                text = text.replace(bold_price, new_bold_price)
+
         return text
 
     @staticmethod
