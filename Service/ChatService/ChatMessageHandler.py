@@ -92,39 +92,55 @@ class ChatMessageHandler:
             print(f"🤖 Sending message to ChatService from {sender_id}:\n{full_message}")
             response = self.chat_service.ask(full_message, sender_id)
 
-            if response.get("function_call"):
+            if (response.get("content")
+                    and isinstance(response.get("content"), list)
+                    and any(isinstance(item, dict) and "function_call" in item for item in response.get("content"))):
                 self.messenger.send_introduce_message(sender_id)
                 time.sleep(2)
                 self.messenger.send_image(sender_id)
+                # return
+
+            if isinstance(response.get("content"), list):
+                for item in response.get("content"):
+                    if isinstance(item, dict) and "function_call" in item:
+                        continue  # Skip function calls
+
+                    item_content = self.chat_service.convert_markdown_bold_to_unicode(item.get("content", ""))
+                    self._handle_content_item(sender_id, item_content, full_message)
+
                 return
 
-            content = self.chat_service.convert_markdown_bold_to_unicode(response.get("content", ""))
-
-            text_part, json_part = self.split_text_and_json(content)
-
-            if text_part == "booking":
-                self.messenger.send_booking_message(sender_id, message_text=full_message)
-                self.set_cached_permission(sender_id, False)
-                return
-
-            if json_part:
-                self.messenger.send_message(sender_id, (text_part, json_part), full_message)
-                return
-
-            main, followup = self.split_main_and_followup(text_part, sender_id)
-
-            post_chat(sender_id, [{"role": "user", "content": full_message}], is_update=True)
-            self.messenger.send_message_with_no_logs(sender_id, main)
-            post_chat(sender_id, [{"role": "assistant", "content": main}], is_update=False)
-
-            if followup.strip():
-                time.sleep(3)
-                self.messenger.send_message_with_no_logs(sender_id, followup)
-                post_chat(sender_id, [{"role": "assistant", "content": followup}], is_update=False)
+            self._handle_content_item(sender_id, response, full_message)
 
         except Exception as e:
             print(f"❌ Error while processing message from {sender_id}: {e}")
             traceback.print_exc()
+
+    def _handle_content_item(self, sender_id, response, full_message):
+        content = self.chat_service.convert_markdown_bold_to_unicode(response)
+        text_part, json_part = self.split_text_and_json(content)
+
+        if text_part == "booking":
+            self.messenger.send_booking_message(sender_id, message_text=full_message)
+            self.set_cached_permission(sender_id, False)
+            return True
+
+        if json_part:
+            self.messenger.send_message(sender_id, (text_part, json_part), full_message)
+            return True
+
+        main, followup = self.split_main_and_followup(text_part, sender_id)
+
+        post_chat(sender_id, [{"role": "user", "content": full_message}], is_update=True)
+        self.messenger.send_message_with_no_logs(sender_id, main)
+        post_chat(sender_id, [{"role": "assistant", "content": main}], is_update=False)
+
+        if followup.strip():
+            time.sleep(3)
+            self.messenger.send_message_with_no_logs(sender_id, followup)
+            post_chat(sender_id, [{"role": "assistant", "content": followup}], is_update=False)
+
+        return True
 
     @staticmethod
     def set_cached_permission(user_id, value=True):

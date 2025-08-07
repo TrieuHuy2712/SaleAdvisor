@@ -17,7 +17,6 @@ class OpenAIChatService(IChatService):
         openai.api_key = self.openai_key
 
     def ask(self, user_input: str, user_id: str) -> dict:
-        # Classify the message
         classification = self.classify_message_with_prompt(user_input)
         if classification == "booking":
             return {"content": "booking"}
@@ -25,13 +24,11 @@ class OpenAIChatService(IChatService):
         # Prepare data
         functions = get_functions()
         faq_data = self.filter_faq_data(get_faq())
-        chat_history = get_chat_by_userid(user_id=user_id)  # should return list of messages or None
+        chat_history = get_chat_by_userid(user_id=user_id)
 
         welcome_prompt = get_welcome_prompt() + "\n" if not chat_history else ""
-
         formatted_faq_text = self.format_faq_data(faq_data)
 
-        # System prompt with FAQ
         system_message = {
             "role": "system",
             "content": get_prompt() + "\n" +
@@ -39,29 +36,33 @@ class OpenAIChatService(IChatService):
                        formatted_faq_text
         }
 
-        # Build messages list
-        messages = [system_message]
-        if chat_history:
-            messages.extend(chat_history)
-        messages.append({"role": "user", "content": user_input})
+        results = []
+        for q in self.split_user_questions(user_input):
 
-        # Send to OpenAI
-        response = openai.ChatCompletion.create(
-            model=self.model,  # Đổi từ gpt-4-turbo
-            functions=functions,
-            function_call="auto",
-            messages=messages,
-            temperature=0.7,
-            # max_tokens=150,
-        )
+            # Build messages list
+            messages = [system_message]
+            if chat_history:
+                messages.extend(chat_history)
+            messages.append({"role": "user", "content": q})
 
-        reply = response['choices'][0]['message']
-        content = reply.get("content", "")
-        if isinstance(content, str):
-            content = self.correct_price_in_response(content)
-        reply["content"] = content
+            # Send to OpenAI
+            response = openai.ChatCompletion.create(
+                model=self.model,  # Đổi từ gpt-4-turbo
+                functions=functions,
+                function_call="auto",
+                messages=messages,
+                temperature=0.7,
+                # max_tokens=150,
+            )
 
-        return reply
+            reply = response['choices'][0]['message']
+            content = reply.get("content", "")
+            if isinstance(content, str):
+                content = self.correct_price_in_response(content)
+            reply["content"] = content
+            results.append(reply)
+
+        return {"content": results}
 
     @staticmethod
     def correct_price_in_response(text: str) -> str:
@@ -87,7 +88,7 @@ class OpenAIChatService(IChatService):
             plain_price = normalize_digits(bold_price)
 
             # Nếu là giá trong khoảng 3xx.000 thì thay
-            if re.match(r"3\d{2}\.000đ/1", plain_price):
+            if re.fullmatch(r"3\d{2}\.000đ/1", plain_price):
                 # Thay thế bằng 350.000 (dưới dạng đậm)
                 new_bold_price = to_bold_digits("350.000") + "đ/" + to_bold_digits("1")
                 text = text.replace(bold_price, new_bold_price)
@@ -249,8 +250,22 @@ class OpenAIChatService(IChatService):
         return ''.join([normal_to_bold.get(c, c) for c in text])
 
     def convert_markdown_bold_to_unicode(self, message):
-        # Tìm đoạn **bold**
+        # Handle case where message is a list
+        if isinstance(message, list):
+            return [self.convert_markdown_bold_to_unicode(item) for item in message]
+
+        # Ensure the message is a string
+        if not isinstance(message, str):
+            print(f"[⚠️] Invalid message type: {type(message)}. Expected string or list.")
+            message = ""  # Default to an empty string if the type is invalid
+
+        # Replace **bold** with Unicode bold
         def repl(match):
             return self.bold_unicode(match.group(1))
 
         return re.sub(r"\*\*(.+?)\*\*", repl, message)
+
+    def split_user_questions(self, user_input: str) -> list[str]:
+        import re
+        questions = re.split(r"[?\n]", user_input)
+        return [q.strip() for q in questions if q.strip()]
