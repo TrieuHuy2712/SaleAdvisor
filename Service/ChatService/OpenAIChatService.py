@@ -79,7 +79,7 @@ class OpenAIChatService(IChatService):
             return s.translate(bold_to_digit)
 
         # Bước 1: Tìm tất cả các chuỗi giá tiền dạng đậm như 𝟯𝟭𝟬.𝟬𝟬𝟬đ/𝟭 𝘀𝘂ấ𝘁
-        pattern = r"([𝟬-𝟵]{3})\.([𝟬-𝟵]{3})đ/([𝟬-𝟵])"
+        pattern = r"([𝟬-𝟵]{3})\.([𝟬-𝟵]{3})đ/([𝟬-𝟵0-9])"
         matches = re.findall(pattern, text)
 
         # Bước 2: Xử lý từng chuỗi
@@ -88,7 +88,7 @@ class OpenAIChatService(IChatService):
             plain_price = normalize_digits(bold_price)
 
             # Nếu là giá trong khoảng 3xx.000 thì thay
-            if re.fullmatch(r"3\d{2}\.000đ/1", plain_price):
+            if re.match(r"3\d{2}\.000đ/1", plain_price):
                 # Thay thế bằng 350.000 (dưới dạng đậm)
                 new_bold_price = to_bold_digits("350.000") + "đ/" + to_bold_digits("1")
                 text = text.replace(bold_price, new_bold_price)
