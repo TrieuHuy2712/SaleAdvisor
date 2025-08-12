@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 import re
+import threading
 import time
 import traceback
-import threading
 from collections import defaultdict
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
 
 from cachetools import TTLCache
 
@@ -18,15 +17,18 @@ from Service.MessageService import MessageClient
 processed_message_ids = TTLCache(maxsize=10000, ttl=300)
 message_buffers = defaultdict(list)
 debounce_timers = {}
-permission_cache = TTLCache(maxsize=10000, ttl=300)
 DEBOUNCE_DELAY_SECONDS = 5
-
 
 @dataclass
 class ChatMessageHandler:
     chat_service: IChatService
     messenger: MessageClient
     fb_page_id: str
+    permission_cache: TTLCache = field(init=False)
+
+    def __post_init__(self):
+        # Initialize the permission cache with a TTL of 300 seconds and max size of 10,000
+        self.permission_cache = TTLCache(maxsize=10000, ttl=300)
 
     def handle_entry(self, entry):
         for event in entry.get('messaging', []):
@@ -142,20 +144,25 @@ class ChatMessageHandler:
 
         return True
 
-    @staticmethod
-    def set_cached_permission(user_id, value=True):
-        permission_cache[user_id] = value
+    def set_cached_permission(self, user_id, value=True):
+        self.permission_cache[user_id] = value
 
     def get_cached_permission(self, user_id):
-        if user_id in permission_cache:
-            return permission_cache[user_id]
+        if user_id in self.permission_cache:
+            return self.permission_cache[user_id]
         permission = self.messenger.check_permission_auto_message(user_id)
         self.set_cached_permission(user_id, permission)
-        return permission
+        return permission 
 
-    @staticmethod
-    def get_user_existed_on_cached(user_id):
-        return user_id in permission_cache
+    def get_user_existed_on_cached(self, user_id):
+        return user_id in self.permission_cache
+
+    def delete_cache_permission(self, user_id):
+        if user_id in self.permission_cache:
+            del self.permission_cache[user_id]
+            print(f"✅ Deleted cached permission for user {user_id}")
+        else:
+            print(f"⚠️ No cached permission found for user {user_id}")
 
     @staticmethod
     def split_text_and_json(response_text):
