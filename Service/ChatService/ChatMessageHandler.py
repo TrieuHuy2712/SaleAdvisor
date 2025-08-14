@@ -121,7 +121,7 @@ class ChatMessageHandler:
                             bot = Bot(token=self.telegram_token)
                             await bot.send_message(chat_id=self.telegram_group_id,
                                                    text=f"📣 Tin nhắn cần hỗ trợ khách hàng có <b> Mã ID: {sender_id} </b>\n"
-                                                        f"<b>Nội dung:<b> {full_message}",
+                                                        f"<b>Nội dung:</b> {full_message}",
                                                    parse_mode="HTML")
 
                         asyncio.run(send_telegram_message())
