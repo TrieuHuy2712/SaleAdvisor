@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import re
 import threading
 import time
@@ -7,6 +8,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 
 from cachetools import TTLCache
+from telegram import Bot
 
 from Database.Connection import post_chat, get_chat_by_userid, get_follow_up_keywords
 from Database.SheetConnection import get_user_existed_on_sheet
@@ -19,12 +21,15 @@ message_buffers = defaultdict(list)
 debounce_timers = {}
 DEBOUNCE_DELAY_SECONDS = 5
 
+
 @dataclass
 class ChatMessageHandler:
     chat_service: IChatService
     messenger: MessageClient
     fb_page_id: str
     permission_cache: TTLCache = field(init=False)
+    telegram_token: str
+    telegram_group_id: str
 
     def __post_init__(self):
         # Initialize the permission cache with a TTL of 300 seconds and max size of 10,000
@@ -110,6 +115,17 @@ class ChatMessageHandler:
                     item_content = self.chat_service.convert_markdown_bold_to_unicode(item.get("content", ""))
                     self._handle_content_item(sender_id, item_content, full_message)
 
+                    message_out_of_scope = self.is_message_response_out_of_scope(item_content)
+                    if message_out_of_scope:
+                        async def send_telegram_message():
+                            bot = Bot(token=self.telegram_token)
+                            await bot.send_message(chat_id=self.telegram_group_id,
+                                                   text=f"📣 Tin nhắn cần hỗ trợ khách hàng có <b> Mã ID: {sender_id} </b>\n"
+                                                        f"<b>Nội dung:<b> {full_message}",
+                                                   parse_mode="HTML")
+
+                        asyncio.run(send_telegram_message())
+
                 return
 
             self._handle_content_item(sender_id, response, full_message)
@@ -152,7 +168,7 @@ class ChatMessageHandler:
             return self.permission_cache[user_id]
         permission = self.messenger.check_permission_auto_message(user_id)
         self.set_cached_permission(user_id, permission)
-        return permission 
+        return permission
 
     def get_user_existed_on_cached(self, user_id):
         return user_id in self.permission_cache
@@ -200,3 +216,17 @@ class ChatMessageHandler:
             any(kw in msg.get("content", "").lower() for kw in followup_keywords)
             for msg in (history_messages or [])
         )
+
+    @staticmethod
+    def is_message_response_out_of_scope(message: str) -> bool:
+        """
+        Check if the message response is out of scope based on predefined keywords.
+        """
+        out_of_scope_keywords = [
+            "Dạ phần này em xin phép ghi nhận và nhờ bộ phận chuyên môn hỗ trợ quý khách sau"
+        ]
+        for item in out_of_scope_keywords:
+            if item.lower() in message.lower():
+                print(f"⚠️ Message is out of scope: {message}")
+                return True
+        return False

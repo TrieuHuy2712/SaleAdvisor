@@ -11,10 +11,11 @@ from Service.TaskScheduler import TaskScheduler
 app = Flask(__name__)
 
 try:
-    VERIFY_TOKEN, PAGE_ACCESS_TOKEN, OPENAI_API_KEY, GPT_MODEL, RECURRING_TIME, FB_PAGE_ID = get_credentials()
+    VERIFY_TOKEN, PAGE_ACCESS_TOKEN, OPENAI_API_KEY, GPT_MODEL, RECURRING_TIME, FB_PAGE_ID, TELEGRAM_TOKEN, TELEGRAM_GROUP_ID = get_credentials()
     messenger = MessageClient(PAGE_ACCESS_TOKEN)
     chat_service = OpenAIChatService(openai_key=OPENAI_API_KEY, model=GPT_MODEL)
-    chatgpt_bridge = ChatMessageHandler(chat_service=chat_service, messenger=messenger, fb_page_id=FB_PAGE_ID)
+    chatgpt_bridge = ChatMessageHandler(chat_service=chat_service, messenger=messenger, fb_page_id=FB_PAGE_ID,
+                                        telegram_token=TELEGRAM_TOKEN, telegram_group_id=TELEGRAM_GROUP_ID)
     task_scheduler = TaskScheduler(chatService=chatgpt_bridge.chat_service, message=messenger,
                                    recurring_time=RECURRING_TIME)
     print("✅ Credentials retrieved successfully")

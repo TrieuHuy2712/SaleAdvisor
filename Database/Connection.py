@@ -33,11 +33,13 @@ def get_credentials():
     gpt_model = credentials.get("gpt_model", "gpt-3.5-turbo-1106")
     recurring_time = credentials.get("recurring_time", 60)
     fb_page_id = credentials.get("fb_page_id")
+    telegram_token = credentials.get("telegram_token", "")
+    telegram_group_id = credentials.get("telegram_group_id", "")
 
     if not all([verify_token, page_access_token, openai_api_key, gpt_model]):
         raise ValueError("Missing required credentials in the database")
 
-    return verify_token, page_access_token, openai_api_key, gpt_model, recurring_time, fb_page_id
+    return verify_token, page_access_token, openai_api_key, gpt_model, recurring_time, fb_page_id, telegram_token, telegram_group_id
 
 
 def get_functions():
