@@ -19,7 +19,7 @@ class OpenAIChatService(IChatService):
     def ask(self, user_input: str, user_id: str) -> dict:
         classification = self.classify_message_with_prompt(user_input)
         if classification == "booking":
-            return {"content": "booking"}
+            return {"content": [{"content": "booking"}]}
 
         # Prepare data
         functions = get_functions()

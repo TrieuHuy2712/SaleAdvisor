@@ -7,8 +7,9 @@ from Database.SheetConnection import save_booking_to_sheet, add_user_to_sheet, g
 
 
 class MessageClient:
-    def __init__(self, page_access_token):
+    def __init__(self, page_access_token, page_id):
         self.page_access_token = page_access_token
+        self.page_id = page_id
         self.api_url = 'https://graph.facebook.com/v21.0/me/messages'
         self.headers = {
             'Content-Type': 'application/json',
@@ -62,23 +63,11 @@ class MessageClient:
         return response.json()
 
     def send_booking_message(self, user_id, message_text=""):
-        url = f"https://graph.facebook.com/v21.0/{user_id}"
-        params = {
-            'fields': 'first_name,last_name',
-        }
-        response = requests.get(url=url, headers=self.headers, params=params)
-        data = response.json()
+        user_name = self.get_user_name_from_conversation_id(user_id)
 
-        if response.status_code != 200:
-            self.send_message_with_no_logs(recipient_id=user_id,
-                                           message_text="Quý khách cho em xin Tên, Số điện thoại và Thời gian đến để em kiểm tra lịch cho mình ngay ạ!")
-            save_booking_to_sheet(user_id=user_id, user_name=f"Nguoi dung", message_text=message_text)
-        else:
-            first_name = data.get('first_name', 'Người dùng')
-            last_name = data.get('last_name', '')
-            self.send_message_with_no_logs(recipient_id=user_id,
-                                           message_text="Quý khách cho em xin Tên, Số điện thoại và Thời gian đến để em kiểm tra lịch cho mình ngay ạ!")
-            save_booking_to_sheet(user_id=user_id, user_name=f"{first_name} {last_name}", message_text=message_text)
+        self.send_message_with_no_logs(recipient_id=user_id,
+                                       message_text="Quý khách cho em xin Tên, Số điện thoại và Thời gian đến để em kiểm tra lịch cho mình ngay ạ!")
+        save_booking_to_sheet(user_id=user_id, user_name=user_name, message_text=message_text)
         return
 
     # -*- coding: utf-8 -*-
@@ -113,20 +102,8 @@ class MessageClient:
         """
         Lấy tên người dùng từ Facebook API.
         """
-        url = f"https://graph.facebook.com/v21.0/{user_id}"
-        params = {
-            'fields': 'first_name,last_name',
-            'access_token': self.page_access_token
-        }
-        response = requests.get(url=url, params=params)
-        if response.status_code == 200:
-            data = response.json()
-            username = f"{data.get('first_name', '')} {data.get('last_name', '')}"
-            add_user_to_sheet(user_id=user_id, user_name=username, is_chatbot_on=is_chatbot_on)
-        else:
-            add_user_to_sheet(user_id=user_id, user_name="Người dùng", is_chatbot_on=is_chatbot_on)
-            # print(f"❌ Lỗi khi lấy tên người dùng: {response.text}")
-            # return "Người dùng"
+        user_name = self.get_user_name_from_conversation_id(user_id)
+        add_user_to_sheet(user_id=user_id, user_name=user_name, is_chatbot_on=is_chatbot_on)
 
     @staticmethod
     def check_permission_auto_message(user_id):
@@ -149,3 +126,43 @@ class MessageClient:
         except Exception as e:
             print(f"❌ Lỗi khi kiểm tra trạng thái follow up: {e}")
             return False
+
+    def get_conversation_id(self, user_id):
+        """
+        Lấy ID cuộc trò chuyện của người dùng từ sheet.
+        """
+        try:
+            url = f'https://graph.facebook.com/v22.0/me/conversations'
+            params = {
+                'user_id': user_id,
+                'platform': 'MESSENGER',
+                'access_token': self.page_access_token
+            }
+            response = requests.get(url=url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('data')[0].get('id')
+        except Exception as e:
+            print(f"❌ Lỗi khi lấy ID cuộc trò chuyện: {e}")
+            return None
+
+    def get_user_name_from_conversation_id(self, user_id):
+        try:
+            conversation_id = self.get_conversation_id(user_id)
+            if conversation_id is None:
+                return "Người dùng"
+            url = f"https://graph.facebook.com/v22.0/{conversation_id}"
+            params = {
+                'fields': 'messages,id,participants',
+                'access_token': self.page_access_token
+            }
+            response = requests.get(url=url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                participants = data.get('participants', {}).get('data', [])
+                return next((item.get('name', 'Người dùng') for item in participants if item.get('id') != self.page_id), 'Người dùng')
+            else:
+                return "Người dùng"
+        except Exception as e:
+            print(f"❌ Lỗi khi lấy tên người dùng từ ID cuộc trò chuyện: {e}")
+            return "Người dùng"
