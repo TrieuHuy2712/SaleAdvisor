@@ -223,7 +223,9 @@ class ChatMessageHandler:
         Check if the message response is out of scope based on predefined keywords.
         """
         out_of_scope_keywords = [
-            "Dạ phần này em xin phép ghi nhận và nhờ bộ phận chuyên môn hỗ trợ quý khách sau"
+            "Dạ phần này em xin phép ghi nhận và nhờ bộ phận chuyên môn hỗ trợ quý khách sau",
+            "ghi nhận và nhờ bộ phận chuyên môn hỗ trợ",
+            "nhờ bộ phận chuyên môn hỗ trợ"
         ]
         for item in out_of_scope_keywords:
             if item.lower() in message.lower():
