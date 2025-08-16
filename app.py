@@ -16,8 +16,7 @@ try:
     chat_service = OpenAIChatService(openai_key=OPENAI_API_KEY, model=GPT_MODEL)
     chatgpt_bridge = ChatMessageHandler(chat_service=chat_service, messenger=messenger, fb_page_id=FB_PAGE_ID,
                                         telegram_token=TELEGRAM_TOKEN, telegram_group_id=TELEGRAM_GROUP_ID)
-    task_scheduler = TaskScheduler(chatService=chatgpt_bridge.chat_service, message=messenger,
-                                   recurring_time=RECURRING_TIME)
+    task_scheduler = TaskScheduler(chatService=chatgpt_bridge.chat_service, message=messenger)
     print("✅ Credentials retrieved successfully")
 except Exception as e:
     print(f"❌ Error retrieving credentials: {e}")

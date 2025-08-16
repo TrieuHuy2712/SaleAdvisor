@@ -75,7 +75,7 @@ def add_user_to_sheet(user_id, user_name, is_chatbot_on=False):
         if get_user_existed_on_sheet(user_id):
             print(f"User {user_id} already exists in the sheet.")
             return
-        sheet.append_row([user_id, user_name, is_chatbot_on, False])
+        sheet.append_row([user_id, user_name, is_chatbot_on, True])
     except Exception as e:
         print(f"❌ Error adding user to sheet: {e}")
 
@@ -162,3 +162,43 @@ def get_follow_up_turn_on(user_id):
     except Exception as e:
         print(f"❌ Error checking follow-up status: {e}")
         return False
+
+
+def get_chat_and_follow_up_turn_on():
+    """
+    Retrieve a list of user IDs where both chatbot and follow-up are turned on.
+    """
+    try:
+        sheet = get_google_sheet("Customer")
+        all_values = sheet.get_all_records()
+
+        # Filter users with both chatbot and follow-up enabled
+        return [
+            str(row.get('ID_Facebook'))
+            for row in all_values
+            if row.get('Turn on Chat bot', 'FALSE') == 'TRUE' and row.get('Follow up', 'FALSE') == 'TRUE'
+        ]
+    except Exception as e:
+        print(f"❌ Error checking chatbot and follow-up status: {e}")
+        return []
+
+
+def set_follow_up_to_false_by_user_ids(user_ids, action=False):
+    """
+    Set the 'Follow up' column to False for a list of user IDs in the 'Customer' sheet.
+    """
+    try:
+        sheet = get_google_sheet("Customer")
+        all_values = sheet.get_all_records()
+
+        for user_id in user_ids:
+            matching_rows = [row for row in all_values if str(row.get('ID_Facebook')) == user_id]
+            if matching_rows:
+                for row in matching_rows:
+                    row_index = all_values.index(row) + 2  # +2 because gspread is 1-indexed and has a header row
+                    sheet.update_cell(row_index, 4, action)  # Assuming 'Follow up' is the 4th column
+            else:
+                print(f"User {user_id} not found in the sheet.")
+        print("✅ 'Follow up' column updated to False for the provided user IDs.")
+    except Exception as e:
+        print(f"❌ Error updating 'Follow up' column: {e}")
