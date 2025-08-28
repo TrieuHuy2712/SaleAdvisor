@@ -79,7 +79,7 @@ class OpenAIChatService(IChatService):
             return s.translate(bold_to_digit)
 
         # Bước 1: Tìm tất cả các chuỗi giá tiền dạng đậm như 𝟯𝟭𝟬.𝟬𝟬𝟬đ/𝟭 𝘀𝘂ấ𝘁
-        pattern = r"([𝟬-𝟵]{3})\.([𝟬-𝟵]{3})đ/([𝟬-𝟵0-9])"
+        pattern = r"([𝟬-𝟵𝟬-𝟵0-9]{3})\.([𝟬-𝟵𝟬-𝟵0-9]{3})đ/([𝟬-𝟵0-9𝟬-𝟵])"
         matches = re.findall(pattern, text)
 
         # Bước 2: Xử lý từng chuỗi
