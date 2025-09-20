@@ -66,34 +66,52 @@ class OpenAIChatService(IChatService):
 
     @staticmethod
     def correct_price_in_response(text: str) -> str:
-        # Bảng ánh xạ số thường <-> số Unicode in đậm
+        # mapping
         digit_to_bold = str.maketrans("0123456789", "𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵")
         bold_to_digit = str.maketrans("𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵", "0123456789")
 
-        # Hàm chuyển số thường thành Unicode in đậm
-        def to_bold_digits(s):
+        def to_bold(s: str) -> str:
             return s.translate(digit_to_bold)
 
-        # Hàm normalize số Unicode về số thường
-        def normalize_digits(s):
+        def normalize(s: str) -> str:
             return s.translate(bold_to_digit)
 
-        # Bước 1: Tìm tất cả các chuỗi giá tiền dạng đậm như 𝟯𝟭𝟬.𝟬𝟬𝟬đ/𝟭 𝘀𝘂ấ𝘁
-        pattern = r"([𝟬-𝟵𝟬-𝟵0-9]{3})\.([𝟬-𝟵𝟬-𝟵0-9]{3})đ/([𝟬-𝟵0-9𝟬-𝟵])"
-        matches = re.findall(pattern, text)
+        # match số (cả ascii và unicode bold), cho phép dấu chấm nhóm nghìn, optional 'đ', optional '/n'
+        pattern = re.compile(r"([0-9𝟬-𝟵]+(?:\.[0-9𝟬-𝟵]{3})*)(?:đ)?/?([0-9𝟬-𝟵])")
 
-        # Bước 2: Xử lý từng chuỗi
-        for match in matches:
-            bold_price = f"{match[0]}.{match[1]}đ/{match[2]}"
-            plain_price = normalize_digits(bold_price)
+        def replacer(m: re.Match) -> str:
+            num_part = m.group(1) or ""  # ví dụ "3930000" hoặc "3130.000" hoặc "𝟯𝟭𝟯𝟬.𝟬𝟬𝟬"
+            qty_part = m.group(2) or ""  # thường là "1" hoặc "𝟭"
 
-            # Nếu là giá trong khoảng 3xx.000 thì thay
-            if re.match(r"3\d{2}\.000đ/1", plain_price):
-                # Thay thế bằng 350.000 (dưới dạng đậm)
-                new_bold_price = to_bold_digits("350.000") + "đ/" + to_bold_digits("1")
-                text = text.replace(bold_price, new_bold_price)
+            # normalize unicode bold -> ascii digits, rồi bỏ mọi ký tự không phải số
+            digits = normalize(num_part)
+            digits = re.sub(r"\D", "", digits)
 
-        return text
+            if not digits:
+                return m.group(0)  # không đủ dữ liệu -> giữ nguyên
+
+            # Nếu dài hơn 6: lấy 6 chữ số ĐẦU (most-significant) theo yêu cầu bạn
+            if len(digits) > 6:
+                digits6 = digits[:6]
+            else:
+                # nếu ít hơn 6 chữ số, không xử lý (trường hợp bất thường)
+                if len(digits) < 6:
+                    return m.group(0)
+                digits6 = digits  # đúng 6 chữ số
+
+            try:
+                price_value = int(digits6)
+            except ValueError:
+                return m.group(0)
+
+            qty = normalize(qty_part)
+
+            # Rule: nếu 300000 <= price < 400000 và qty == "1" => đổi về 350.000
+            if 300000 <= price_value < 400000 and qty == "1":
+                return f"{to_bold('350.000')}đ/{to_bold('1')}"
+            return m.group(0)
+
+        return pattern.sub(replacer, text)
 
     @staticmethod
     def parse_faq_entry(entry: str) -> dict:
