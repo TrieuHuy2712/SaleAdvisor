@@ -106,9 +106,9 @@ class OpenAIChatService(IChatService):
 
             qty = normalize(qty_part)
 
-            # Rule: nếu 300000 <= price < 400000 và qty == "1" => đổi về 350.000
+            # Rule: nếu 300000 <= price < 400000 và qty == "1" => đổi về 390.000
             if 300000 <= price_value < 400000 and qty == "1":
-                return f"{to_bold('350.000')}đ/{to_bold('1')}"
+                return f"{to_bold('390.000')}đ/{to_bold('1')}"
             return m.group(0)
 
         return pattern.sub(replacer, text)
